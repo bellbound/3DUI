@@ -1,0 +1,33 @@
+FormKey: 000801:3DUI.esp
+EditorID: ProjectileSpawner
+EquipmentType: 013F45:Skyrim.esm
+Keywords:
+- 01E715:Skyrim.esm
+- 08F958:Skyrim.esm
+Description:
+  TargetLanguage: English
+  Value: ''
+BasicStats:
+  Value: 270
+  Weight: 10
+  Damage: 1
+Data:
+  AnimationType: Bow
+  Unused: 0x000000
+  Speed: 10.875
+  Reach: 1
+  NumProjectiles: 1
+  RangeMax: 60000
+  AnimationAttackMult: 1
+  Unknown2: 1084227584
+  RumbleLeftMotorStrength: 0.5
+  RumbleRightMotorStrength: 1
+  RumbleDuration: 0.33
+  Unknown3: 0x000000000000000000000000
+Critical:
+  Damage: 1
+  PercentMult: 1
+  Flags:
+  - OnDeath
+  Unused2: 0x000000
+DetectionSoundLevel: Silent

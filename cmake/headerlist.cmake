@@ -1,0 +1,19 @@
+set(headers ${headers}
+	src/PCH.h
+    src/log.h
+    src/util.h
+    src/hook.h
+    src/settings.h
+    src/Config.h
+    src/InputManager.h
+    src/MenuChecker.h
+    src/higgsinterface001.h
+    external/VRManagerAPI.h
+    external/PapyrusVRTypes.h
+    external/VRHookAPI.h
+    src/projectile/InteractionController.h
+    src/projectile/DriverUpdateManager.h
+    src/projectile/ProjectileCleanupManager.h
+    src/api/WrapperTypes.h
+    src/ThreeDUIActorMenu.h
+)

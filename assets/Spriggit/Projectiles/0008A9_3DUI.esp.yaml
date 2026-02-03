@@ -1,0 +1,15 @@
+FormKey: 0008A9:3DUI.esp
+Model:
+  File: 3DUI\empty.nif
+  Data: 0x020000000000000000000000
+Flags:
+- PassThroughSmallTransparent
+- DisableCombatAimCorrection
+- 0x800
+Type: Arrow
+Speed: 10
+Range: 99999
+RelaunchInterval: 0.25
+CollisionLayer: 000804:3DUI.esp
+MuzzleFlashModel: ''
+SoundLevel: 2

@@ -1,0 +1,13 @@
+FormKey: 0008A1:3DUI.esp
+Model:
+  File: Magic\orbunequip.nif
+  Data: 0x020000000000000000000000
+Description:
+  TargetLanguage: English
+  Value: ''
+Keywords:
+- 0917E7:Skyrim.esm
+Projectile: 00082F:3DUI.esp
+Flags:
+- NonBolt
+Weight: 0
