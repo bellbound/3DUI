@@ -2,7 +2,7 @@
 
 A library for creating 3D floating UIs in Skyrim VR with automatic layout, VR interaction (hover, grab, scroll), and flexible anchoring.
 
-## Features
+## Features 
 
 - **Full scene graph positioning** - Position UI elements in local 3D space
 - **Automatic Layout for common use cases** - Containers handle child element positioning
