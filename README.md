@@ -50,14 +50,14 @@ This library is well suited for everything that can be built using a composition
 
 ## Quick Links
 
-- **[[Overview]]** - Node types and hierarchy basics
-- **[[Getting Started]]** - Initialize the API and create your first UI
-- **[[Complete Example]]** - Full working inventory grid
+- **[Overview](https://github.com/bellbound/3DUI/wiki/Overview)** - Node types and hierarchy basics
+- **[Getting Started](https://github.com/bellbound/3DUI/wiki/Getting-Started)** - Initialize the API and create your first UI
+- **[Complete Example](https://github.com/bellbound/3DUI/wiki/Complete-Example)** - Full working inventory grid
 
 
 ## Actor Menu
 
-The [[Actor Menu]] system provides a shared "grab NPC + press trigger" interaction pattern. Multiple mods can register elements that appear when users interact with NPCs, with automatic disambiguation when multiple mods are eligible.
+The [Actor Menu](https://github.com/bellbound/3DUI/wiki/Actor-Menu) system provides a shared "grab NPC + press trigger" interaction pattern. Multiple mods can register elements that appear when users interact with NPCs, with automatic disambiguation when multiple mods are eligible.
 
 
 ## How It Works Under The Hood
