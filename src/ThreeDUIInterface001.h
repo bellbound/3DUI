@@ -589,7 +589,7 @@ struct Root : Container {
 constexpr uint32_t P3DUI_INTERFACE_VERSION =
     0 * 1000000 +
     9 * 10000 +
-    4 * 100 +
+    5 * 100 +
     0;
 
 struct Interface001 {
