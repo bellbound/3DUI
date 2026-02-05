@@ -9,9 +9,6 @@ namespace Projectile {
 // Placeholder texture path - transparent texture for visual consistency while loading
 static constexpr const char* PLACEHOLDER_TEXTURE_PATH = "textures\\VRDressup\\transparent.dds";
 
-namespace
-{
-    
 AsyncTextureLoader::AsyncTextureLoader() = default;
 
 AsyncTextureLoader::~AsyncTextureLoader() {
@@ -427,6 +424,4 @@ void AsyncTextureLoader::FireCallbacks(const std::string& texturePath, RE::NiPoi
         spdlog::trace("AsyncTextureLoader: Fired {} callbacks for '{}'",
             callbacks.size(), texturePath);
     }
-}
-
 } // namespace Projectile
