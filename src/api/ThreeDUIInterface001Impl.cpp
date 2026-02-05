@@ -19,7 +19,6 @@ namespace P3DUI {
 class Interface001Impl : public Interface001 {
 public:
     uint32_t GetInterfaceVersion() override { return P3DUI_INTERFACE_VERSION; }
-    uint32_t GetBuildNumber() override { return 1; }
 
     // =========================================================================
     // Root Management

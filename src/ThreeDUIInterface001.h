@@ -585,8 +585,6 @@ struct Interface001 {
     // === Version ===
     // Returns P3DUI_INTERFACE_VERSION (1 for this interface)
     virtual uint32_t GetInterfaceVersion() = 0;
-    // Returns implementation build number (increments with each release)
-    virtual uint32_t GetBuildNumber() = 0;
 
     // === Root Management ===
     // Gets an existing root by ID, or creates it if it doesn't exist.
