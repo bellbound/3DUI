@@ -53,6 +53,13 @@ public:
         return ptr;
     }
 
+    Root* GetRoot(const char* id) override {
+        if (!id) return nullptr;
+        auto& registry = WrapperRegistry::Get();
+        auto it = registry.roots.find(id);
+        return it != registry.roots.end() ? it->second.get() : nullptr;
+    }
+
     // =========================================================================
     // Factory Methods
     // =========================================================================

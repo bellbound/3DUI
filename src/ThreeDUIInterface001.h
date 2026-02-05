@@ -594,6 +594,8 @@ struct Interface001 {
     // Safe to call multiple times with the same ID — returns the existing root.
     // Config is only used on first creation; subsequent calls ignore config differences.
     virtual Root* GetOrCreateRoot(const RootConfig& config) = 0;
+    // Get an existing root by ID. Returns nullptr if not found.
+    virtual Root* GetRoot(const char* id) = 0;
 
     // === Factory Methods ===
     // Create nodes. Caller must add to a container via AddChild().
