@@ -179,11 +179,7 @@ SKSEPluginLoad(const SKSE::LoadInterface *skse) {
 	SetupLog();
 
 	spdlog::info("3DUI loading...");
-	spdlog::info("3DUI version {}.{}.{} (build {:08d})",
-		P3DUI_VERSION_MAJOR,
-		P3DUI_VERSION_MINOR,
-		P3DUI_VERSION_PATCH,
-		P3DUI_BUILD_NUMBER);
+	spdlog::info("3DUI version {}.{}.{} (build {:08d})",P3DUI_INTERFACE_VERSION);
 
 	// Note: Hooks are now installed lazily by DriverUpdateManager::Register()
 	// on first driver registration. This ensures zero per-frame cost when no
