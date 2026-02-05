@@ -424,4 +424,6 @@ void AsyncTextureLoader::FireCallbacks(const std::string& texturePath, RE::NiPoi
         spdlog::trace("AsyncTextureLoader: Fired {} callbacks for '{}'",
             callbacks.size(), texturePath);
     }
+}
+
 } // namespace Projectile
