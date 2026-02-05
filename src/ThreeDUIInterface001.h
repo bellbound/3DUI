@@ -580,6 +580,17 @@ struct Root : Container {
 // Interface version for compatibility checking
 // Consumers should verify: api->GetInterfaceVersion() == P3DUI_INTERFACE_VERSION
 constexpr uint32_t P3DUI_INTERFACE_VERSION = 1;
+// 3DUI versioning (current: 0.9.2)
+constexpr uint32_t P3DUI_VERSION_MAJOR = 0;
+constexpr uint32_t P3DUI_VERSION_MINOR = 9;
+constexpr uint32_t P3DUI_VERSION_PATCH = 2;
+constexpr uint32_t P3DUI_VERSION_BETA = 0;
+// Build numbers follow HIGGS format: V01.00.05.00
+constexpr uint32_t P3DUI_BUILD_NUMBER =
+    P3DUI_VERSION_MAJOR * 1000000 +
+    P3DUI_VERSION_MINOR * 10000 +
+    P3DUI_VERSION_PATCH * 100 +
+    P3DUI_VERSION_BETA;
 
 struct Interface001 {
     // === Version ===
