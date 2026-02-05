@@ -25,35 +25,32 @@ public:
     // Root Management
     // =========================================================================
 
-    Root* CreateRoot(const RootConfig& config) override {
+    Root* GetOrCreateRoot(const RootConfig& config) override {
         if (!config.id || !*config.id) {
-            spdlog::error("P3DUI::CreateRoot: ID is required");
+            spdlog::error("P3DUI::GetOrCreateRoot: ID is required");
             return nullptr;
         }
         if (!config.modId || !*config.modId) {
-            spdlog::error("P3DUI::CreateRoot: modId is required");
+            spdlog::error("P3DUI::GetOrCreateRoot: modId is required");
             return nullptr;
         }
 
         auto& registry = WrapperRegistry::Get();
-        if (registry.roots.count(config.id)) {
-            spdlog::error("[{}] CreateRoot: Root '{}' already exists", config.modId, config.id);
-            return nullptr;
+
+        // Return existing root if present
+        auto it = registry.roots.find(config.id);
+        if (it != registry.roots.end()) {
+            spdlog::trace("[{}] GetOrCreateRoot: Returning existing root '{}'", config.modId, config.id);
+            return it->second.get();
         }
 
+        // Create new root
         auto wrapper = std::make_unique<RootWrapper>(config);
         auto* ptr = wrapper.get();
         registry.roots[config.id] = std::move(wrapper);
 
         spdlog::info("[{}] Created menu '{}'", config.modId, config.id);
         return ptr;
-    }
-
-    Root* GetRoot(const char* id) override {
-        if (!id) return nullptr;
-        auto& registry = WrapperRegistry::Get();
-        auto it = registry.roots.find(id);
-        return it != registry.roots.end() ? it->second.get() : nullptr;
     }
 
     // =========================================================================

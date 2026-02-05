@@ -12,7 +12,7 @@ Uses the `HalfWheel` container (top arc) combined with manually laid out element
 
 ---
 
-### Non-Interactive Elements
+### Non-UI Elements
 
 You can position projectiles anywhere and use only the mesh rendering and positioning — no hand interactivity required. The red sphere below is a 3DUI element.
 

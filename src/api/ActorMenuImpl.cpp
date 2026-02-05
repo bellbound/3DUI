@@ -347,9 +347,9 @@ private:
         rootConfig.grabButtonMask = 0;  // No grab repositioning
         rootConfig.eventCallback = nullptr;  // We handle events via GetHoveredItem on release
 
-        m_root = m_api->CreateRoot(rootConfig);
+        m_root = m_api->GetOrCreateRoot(rootConfig);
         if (!m_root) {
-            spdlog::error("ActorMenuImpl::SetupMenu: Failed to create root");
+            spdlog::error("ActorMenuImpl::SetupMenu: Failed to get/create root");
             return false;
         }
 
