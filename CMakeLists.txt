@@ -43,11 +43,21 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources}) # <--- sp
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23) # <--- use C++23 standard
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h) # <--- PCH.h is required!
 
+string(TIMESTAMP THREEDUI_BUILD_DATE "%Y-%m-%d")
+string(TIMESTAMP THREEDUI_BUILD_TIME "%H:%M:%S")
+
 target_include_directories(
 	"${PROJECT_NAME}"
 	PRIVATE
 		${SIMPLEINI_INCLUDE_DIRS}
 		${CMAKE_SOURCE_DIR}/external
+)
+
+target_compile_definitions(
+	${PROJECT_NAME}
+	PRIVATE
+		THREEDUI_BUILD_DATE="${THREEDUI_BUILD_DATE}"
+		THREEDUI_BUILD_TIME="${THREEDUI_BUILD_TIME}"
 )
 
 # Generate PDB in Release builds

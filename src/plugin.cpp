@@ -100,6 +100,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kPostLoad:
 		spdlog::info("PostLoad");
+		spdlog::info("Build timestamp: {} {}", THREEDUI_BUILD_DATE, THREEDUI_BUILD_TIME);
 		break;
 
 	case SKSE::MessagingInterface::kPostPostLoad:
