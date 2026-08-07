@@ -243,6 +243,7 @@ public:
 
     // === Container ===
     void AddChild(Positionable* child) override;
+    bool RemoveChild(Positionable* child) override;
     void SetChildren(Positionable** children, uint32_t count) override;
     void Clear() override;
     uint32_t GetChildCount() override;
@@ -278,6 +279,7 @@ public:
 
     // === Container ===
     void AddChild(Positionable* child) override;
+    bool RemoveChild(Positionable* child) override;
     void SetChildren(Positionable** children, uint32_t count) override;
     void Clear() override;
     uint32_t GetChildCount() override;
@@ -313,6 +315,7 @@ public:
 
     // === Container ===
     void AddChild(Positionable* child) override;
+    bool RemoveChild(Positionable* child) override;
     void SetChildren(Positionable** children, uint32_t count) override;
     void Clear() override;
     uint32_t GetChildCount() override;
@@ -356,6 +359,7 @@ public:
 
     // === Container ===
     void AddChild(Positionable* child) override;
+    bool RemoveChild(Positionable* child) override;
     void SetChildren(Positionable** children, uint32_t count) override;
     void Clear() override;
     uint32_t GetChildCount() override;
@@ -399,6 +403,7 @@ public:
 
     // === Container ===
     void AddChild(Positionable* child) override;
+    bool RemoveChild(Positionable* child) override;
     void SetChildren(Positionable** children, uint32_t count) override;
     void Clear() override;
     uint32_t GetChildCount() override;

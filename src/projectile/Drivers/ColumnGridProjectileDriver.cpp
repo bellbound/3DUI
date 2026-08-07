@@ -304,10 +304,9 @@ void ColumnGridProjectileDriver::UpdateScrollFromHand() {
     delta.z = handLocal.z - m_scrollPrevLocalPos.z;
 
     // For horizontal scrolling, we care about X movement
-    // Moving hand left (negative X) scrolls content right (shows later items)
-    // Moving hand right (positive X) scrolls content left (shows earlier items)
-    // So we SUBTRACT the delta to get intuitive "drag" behavior
-    float distance = -delta.x;
+    // Moving hand right (positive X) scrolls content right (shows later items)
+    // Moving hand left (negative X) scrolls content left (shows earlier items)
+    float distance = delta.x;
 
     // Guard against NaN/infinity
     if (!std::isfinite(distance)) {
@@ -397,16 +396,21 @@ void ColumnGridProjectileDriver::UpdateLayout(float deltaTime) {
     float horizontalOriginOffset = 0.0f;
     float scrollAdjustment = 0.0f;
 
+    // When scrolling is enabled, the origin offset should position items relative to
+    // the visible viewport, not the full content width. Using totalWidth would push
+    // the first columns permanently outside the visible window, unreachable by scrolling.
+    float effectiveWidth = scrollingEnabled ? m_visibleWidth : totalWidth;
+
     // Compute horizontal origin offset based on fill direction and origin setting
     if (m_horizontalFill == P3DUI::HorizontalFill::LeftToRight) {
         // Content spans from X=0 to X=-totalWidth (leftward in UI coords)
         // To center/anchor, we shift RIGHT (positive X) to bring the anchor point to X=0
         switch (m_horizontalOrigin) {
             case P3DUI::HorizontalOrigin::Left:
-                horizontalOriginOffset = totalWidth;  // Shift right so leftmost item is at X=0
+                horizontalOriginOffset = effectiveWidth;  // Shift right so leftmost item is at X=0
                 break;
             case P3DUI::HorizontalOrigin::Center:
-                horizontalOriginOffset = totalWidth / 2.0f;  // Shift right so center is at X=0
+                horizontalOriginOffset = effectiveWidth / 2.0f;  // Shift right so center is at X=0
                 break;
             case P3DUI::HorizontalOrigin::Right:
                 horizontalOriginOffset = 0.0f;  // Rightmost (X=0) is already at origin
@@ -422,10 +426,10 @@ void ColumnGridProjectileDriver::UpdateLayout(float deltaTime) {
         // RightToLeft: Content spans from X=0 leftward (in player view, so UI's +X direction)
         switch (m_horizontalOrigin) {
             case P3DUI::HorizontalOrigin::Left:
-                horizontalOriginOffset = totalWidth;  // Shift right so left edge is at X=0
+                horizontalOriginOffset = effectiveWidth;  // Shift right so left edge is at X=0
                 break;
             case P3DUI::HorizontalOrigin::Center:
-                horizontalOriginOffset = totalWidth / 2.0f;  // Shift right so center is at X=0
+                horizontalOriginOffset = effectiveWidth / 2.0f;  // Shift right so center is at X=0
                 break;
             case P3DUI::HorizontalOrigin::Right:
                 horizontalOriginOffset = 0.0f;  // Right is already at X=0

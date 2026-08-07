@@ -3,6 +3,7 @@
 #include "../util/VRNodes.h"
 #include "../log.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace P3DUI {
@@ -235,6 +236,59 @@ void RootWrapper::AddChild(Positionable* child) {
             m_modId, m_id, rowGrid->GetID(), m_children.size());
         return;
     }
+}
+
+bool RootWrapper::RemoveChild(Positionable* child) {
+    if (m_destroyed) return false;
+    if (!child) return false;
+
+    // Find in wrapper children
+    auto it = std::find(m_children.begin(), m_children.end(), child);
+    if (it == m_children.end()) {
+        spdlog::warn("P3DUI::Root::RemoveChild: child not found in '{}'", m_id);
+        return false;
+    }
+
+    // Remove from impl layer and mark destroyed based on type
+    bool removed = false;
+    if (auto* elem = dynamic_cast<ElementWrapper*>(child)) {
+        m_driver->RemoveChild(elem->GetImpl());
+        elem->MarkDestroyed();
+        removed = true;
+    } else if (auto* text = dynamic_cast<TextWrapper*>(child)) {
+        m_driver->RemoveChild(text->GetImpl());
+        text->MarkDestroyed();
+        removed = true;
+    } else if (auto* scrollWheel = dynamic_cast<ScrollWheelWrapper*>(child)) {
+        m_driver->RemoveChild(scrollWheel->GetImpl());
+        scrollWheel->MarkDestroyed();
+        removed = true;
+    } else if (auto* wheel = dynamic_cast<WheelWrapper*>(child)) {
+        m_driver->RemoveChild(wheel->GetImpl());
+        wheel->MarkDestroyed();
+        removed = true;
+    } else if (auto* colGrid = dynamic_cast<ColumnGridWrapper*>(child)) {
+        m_driver->RemoveChild(colGrid->GetImpl());
+        colGrid->MarkDestroyed();
+        removed = true;
+    } else if (auto* rowGrid = dynamic_cast<RowGridWrapper*>(child)) {
+        m_driver->RemoveChild(rowGrid->GetImpl());
+        rowGrid->MarkDestroyed();
+        removed = true;
+    }
+
+    if (!removed) {
+        spdlog::error("P3DUI::Root::RemoveChild: unhandled child type in '{}'", m_id);
+        return false;
+    }
+
+    // Remove from wrapper children and destroy from registry
+    m_children.erase(it);
+    WrapperRegistry::Get().Destroy(child);
+
+    spdlog::trace("[{}] Root '{}' RemoveChild: removed child (remaining: {})",
+        m_modId, m_id, m_children.size());
+    return true;
 }
 
 void RootWrapper::SetChildren(Positionable** children, uint32_t count) {

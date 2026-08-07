@@ -396,6 +396,11 @@ void RowGridProjectileDriver::UpdateLayout(float deltaTime) {
     float originOffset = 0.0f;
     float scrollAdjustment = 0.0f;
 
+    // When scrolling is enabled, the origin offset should position items relative to
+    // the visible viewport, not the full content height. Using totalHeight would push
+    // the first rows permanently outside the visible window, unreachable by scrolling.
+    float effectiveHeight = scrollingEnabled ? m_visibleHeight : totalHeight;
+
     // Compute origin offset based on fill direction and origin setting
     if (m_verticalFill == P3DUI::VerticalFill::TopToBottom) {
         // Content spans from Z=0 (row 0) down to Z=-totalHeight
@@ -404,10 +409,10 @@ void RowGridProjectileDriver::UpdateLayout(float deltaTime) {
                 originOffset = 0.0f;  // Top is already at Z=0
                 break;
             case P3DUI::VerticalOrigin::Center:
-                originOffset = totalHeight / 2.0f;  // Shift up so center is at Z=0
+                originOffset = effectiveHeight / 2.0f;  // Shift up so center is at Z=0
                 break;
             case P3DUI::VerticalOrigin::Bottom:
-                originOffset = totalHeight;  // Shift up so bottom is at Z=0
+                originOffset = effectiveHeight;  // Shift up so bottom is at Z=0
                 break;
             default:
                 break;
@@ -420,10 +425,10 @@ void RowGridProjectileDriver::UpdateLayout(float deltaTime) {
         // BottomToTop: Content spans from Z=0 (row 0) up to Z=+totalHeight
         switch (m_verticalOrigin) {
             case P3DUI::VerticalOrigin::Top:
-                originOffset = -totalHeight;  // Shift down so top is at Z=0
+                originOffset = -effectiveHeight;  // Shift down so top is at Z=0
                 break;
             case P3DUI::VerticalOrigin::Center:
-                originOffset = -totalHeight / 2.0f;  // Shift down so center is at Z=0
+                originOffset = -effectiveHeight / 2.0f;  // Shift down so center is at Z=0
                 break;
             case P3DUI::VerticalOrigin::Bottom:
                 originOffset = 0.0f;  // Bottom is already at Z=0

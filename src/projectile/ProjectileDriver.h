@@ -40,6 +40,10 @@ public:
     // Sets this driver as the parent of the child
     virtual void AddChild(IPositionablePtr child);
 
+    // Remove a specific child (destroys projectile if applicable, clears parent)
+    // Returns true if the child was found and removed.
+    virtual bool RemoveChild(IPositionablePtr child);
+
     // Clear all children (destroys projectiles, releases sub-drivers)
     virtual void Clear();
 

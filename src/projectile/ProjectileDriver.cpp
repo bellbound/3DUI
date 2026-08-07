@@ -4,6 +4,8 @@
 #include "../util/VRNodes.h"
 #include "../log.h"
 
+#include <algorithm>
+
 namespace Projectile {
 
 // =============================================================================
@@ -181,6 +183,35 @@ void ProjectileDriver::AddChild(IPositionablePtr child) {
 
     spdlog::trace("[Driver '{}'] AddChild: child='{}' (total: {})",
         GetID(), child->GetID(), m_children.size());
+}
+
+bool ProjectileDriver::RemoveChild(IPositionablePtr child) {
+    if (!child) return false;
+
+    auto it = std::find(m_children.begin(), m_children.end(), child);
+    if (it == m_children.end()) return false;
+
+    // Clean up the child (same logic as Clear but for a single child)
+    if (auto* proj = dynamic_cast<ControlledProjectile*>(child.get())) {
+        if (proj->IsValid()) {
+            spdlog::trace("[Driver '{}'] RemoveChild: destroying projectile '{}'", GetID(), proj->GetID());
+            proj->Destroy();
+        }
+    } else if (auto* childDriver = dynamic_cast<ProjectileDriver*>(child.get())) {
+        childDriver->Clear();
+    }
+
+    child->SetParent(nullptr);
+    m_children.erase(it);
+
+    // Re-layout remaining children
+    if (m_subsystem) {
+        UpdateLayout(0.0f);
+    }
+
+    spdlog::trace("[Driver '{}'] RemoveChild: child='{}' (remaining: {})",
+        GetID(), child->GetID(), m_children.size());
+    return true;
 }
 
 void ProjectileDriver::Clear() {

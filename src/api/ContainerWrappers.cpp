@@ -62,6 +62,57 @@ static bool AddChildImpl(
 }
 
 // =============================================================================
+// Container RemoveChild Helper
+// =============================================================================
+// Removes a single child from a container, following the same pattern as
+// ClearChildrenImpl but for an individual child. The child is tombstoned
+// and removed from the registry.
+
+template<typename ContainerT, typename ImplT>
+static bool RemoveChildImpl(
+    ContainerT* container,
+    Positionable* child,
+    std::shared_ptr<ImplT>& impl,
+    std::vector<Positionable*>& children,
+    const std::string& containerId,
+    const char* containerType)
+{
+    if (!child) return false;
+
+    // Find in wrapper children
+    auto it = std::find(children.begin(), children.end(), child);
+    if (it == children.end()) {
+        spdlog::warn("P3DUI::{}::RemoveChild: child not found in '{}'", containerType, containerId);
+        return false;
+    }
+
+    // Remove from impl layer and mark destroyed
+    bool removed = false;
+    if (auto* elem = dynamic_cast<ElementWrapper*>(child)) {
+        impl->RemoveChild(elem->GetImpl());
+        elem->MarkDestroyed();
+        removed = true;
+    } else if (auto* text = dynamic_cast<TextWrapper*>(child)) {
+        impl->RemoveChild(text->GetImpl());
+        text->MarkDestroyed();
+        removed = true;
+    }
+
+    if (!removed) {
+        spdlog::error("P3DUI::{}::RemoveChild: unhandled child type in '{}'", containerType, containerId);
+        return false;
+    }
+
+    // Remove from wrapper children and destroy from registry
+    children.erase(it);
+    WrapperRegistry::Get().Destroy(child);
+
+    spdlog::trace("[{} '{}'] RemoveChild: removed child (remaining: {})",
+        containerType, containerId, children.size());
+    return true;
+}
+
+// =============================================================================
 // Container Clear Helper
 // =============================================================================
 // Shared logic for destroying children when a container is cleared.
@@ -157,6 +208,11 @@ Positionable* ScrollWheelWrapper::GetParent() {
 void ScrollWheelWrapper::AddChild(Positionable* child) {
     if (m_destroyed) return;
     AddChildImpl(this, child, m_impl, m_children, m_id, "ScrollWheel");
+}
+
+bool ScrollWheelWrapper::RemoveChild(Positionable* child) {
+    if (m_destroyed) return false;
+    return RemoveChildImpl(this, child, m_impl, m_children, m_id, "ScrollWheel");
 }
 
 void ScrollWheelWrapper::SetChildren(Positionable** children, uint32_t count) {
@@ -262,6 +318,11 @@ Positionable* WheelWrapper::GetParent() {
 void WheelWrapper::AddChild(Positionable* child) {
     if (m_destroyed) return;
     AddChildImpl(this, child, m_impl, m_children, m_id, "Wheel");
+}
+
+bool WheelWrapper::RemoveChild(Positionable* child) {
+    if (m_destroyed) return false;
+    return RemoveChildImpl(this, child, m_impl, m_children, m_id, "Wheel");
 }
 
 void WheelWrapper::SetChildren(Positionable** children, uint32_t count) {
@@ -370,6 +431,11 @@ Positionable* ColumnGridWrapper::GetParent() {
 void ColumnGridWrapper::AddChild(Positionable* child) {
     if (m_destroyed) return;
     AddChildImpl(this, child, m_impl, m_children, m_id, "ColumnGrid");
+}
+
+bool ColumnGridWrapper::RemoveChild(Positionable* child) {
+    if (m_destroyed) return false;
+    return RemoveChildImpl(this, child, m_impl, m_children, m_id, "ColumnGrid");
 }
 
 void ColumnGridWrapper::SetChildren(Positionable** children, uint32_t count) {
@@ -533,6 +599,11 @@ Positionable* RowGridWrapper::GetParent() {
 void RowGridWrapper::AddChild(Positionable* child) {
     if (m_destroyed) return;
     AddChildImpl(this, child, m_impl, m_children, m_id, "RowGrid");
+}
+
+bool RowGridWrapper::RemoveChild(Positionable* child) {
+    if (m_destroyed) return false;
+    return RemoveChildImpl(this, child, m_impl, m_children, m_id, "RowGrid");
 }
 
 void RowGridWrapper::SetChildren(Positionable** children, uint32_t count) {
