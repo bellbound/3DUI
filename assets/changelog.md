@@ -1,6 +1,11 @@
 0.10.3
 **No API change** - interface version 0.10.3.0. Nothing in the header moved, so
 consumers built against any 0.10.x keep working without a rebuild.
+- Fixed the projectile hook scanning every tracked element to identify each update,
+  which made the per-frame cost grow with the square of the number of live elements:
+  at ~475 elements the lookup alone ran ~30ms a frame plus mutex waits, and menus of
+  a few hundred items froze the game outright. The hook now resolves a projectile
+  through a reverse index in constant time, hit or miss.
 - Mesh preflight: every model path is inspected before it goes on a form and reaches
   the game's model loader. A mesh that would crash the loader is swapped for
   `meshes\3DUI\orb.nif` and the reason is logged; the element keeps its place in the

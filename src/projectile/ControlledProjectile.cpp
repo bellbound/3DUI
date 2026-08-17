@@ -405,8 +405,12 @@ void ControlledProjectile::UnbindProjectile() {
         }
 
         // Unbind and mark for deletion
+        RE::Projectile* wasBoundTo = m_gameProjectile.GetProjectile();
         m_gameProjectile.MarkForDeletion();
         m_gameProjectile.Unbind();
+        if (m_subsystem) {
+            m_subsystem->UnindexProjectile(wasBoundTo);
+        }
 
         // Release the form
         if (m_subsystem && m_formIndex >= 0) {
@@ -607,8 +611,10 @@ void ControlledProjectile::Destroy() {
     }
 
     // Mark for deletion and unbind
+    RE::Projectile* wasBoundTo = m_gameProjectile.GetProjectile();
     m_gameProjectile.MarkForDeletion();
     m_gameProjectile.Unbind();
+    m_subsystem->UnindexProjectile(wasBoundTo);
 
     // Release our form
     if (m_formIndex >= 0) {
@@ -741,8 +747,16 @@ void ControlledProjectile::BindToProjectile(RE::Projectile* proj, uint64_t gener
 
     spdlog::trace("[BindState] {} Firing -> Bound (gen={})", m_uuid.ToString(), generation);
 
-    // We now own the Bound state - complete the bind
+    // We now own the Bound state - complete the bind. BindToProjectile drops any
+    // previous binding itself, so retire that index entry before it goes stale.
+    RE::Projectile* previous = m_gameProjectile.GetProjectile();
     m_gameProjectile.BindToProjectile(proj);
+    if (m_subsystem) {
+        if (previous && previous != proj) {
+            m_subsystem->UnindexProjectile(previous);
+        }
+        m_subsystem->IndexProjectile(proj, m_uuid);
+    }
 
     // Ensure visibility is set (may have been false from previous hide)
     m_gameProjectile.SetVisible(true);

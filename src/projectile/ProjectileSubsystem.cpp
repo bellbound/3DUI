@@ -161,6 +161,7 @@ void ProjectileSubsystem::ReleaseAllProjectiles() {
         }
     }
     m_projectiles.clear();
+    m_projectileIndex.clear();
     ProjectileHook::ResetControlledCount();
 
     spdlog::info("ProjectileSubsystem released all projectiles");
@@ -213,15 +214,52 @@ size_t ProjectileSubsystem::GetActiveCount() const {
     return count;
 }
 
-ControlledProjectile* ProjectileSubsystem::FindByGameProjectile(RE::Projectile* proj) {
-    for (auto& [uuid, weakPtr] : m_projectiles) {
-        if (auto controlledProj = weakPtr.lock()) {
-            if (controlledProj->GetGameProjectile().GetProjectile() == proj) {
-                return controlledProj.get();
-            }
-        }
+void ProjectileSubsystem::IndexProjectile(RE::Projectile* proj, const UUID& uuid) {
+    if (!proj) {
+        return;
     }
-    return nullptr;
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    m_projectileIndex[proj] = uuid;
+}
+
+void ProjectileSubsystem::UnindexProjectile(RE::Projectile* proj) {
+    if (!proj) {
+        return;
+    }
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    m_projectileIndex.erase(proj);
+}
+
+ControlledProjectile* ProjectileSubsystem::FindByGameProjectile(RE::Projectile* proj) {
+    // A miss is the common case - the hook sees every arrow and spell in the world,
+    // not just ours - so it has to be as cheap as a hit.
+    auto indexed = m_projectileIndex.find(proj);
+    if (indexed == m_projectileIndex.end()) {
+        return nullptr;
+    }
+
+    auto tracked = m_projectiles.find(indexed->second);
+    if (tracked == m_projectiles.end()) {
+        m_projectileIndex.erase(indexed);
+        return nullptr;
+    }
+
+    auto controlledProj = tracked->second.lock();
+    if (!controlledProj) {
+        m_projectiles.erase(tracked);
+        m_projectileIndex.erase(indexed);
+        return nullptr;
+    }
+
+    // The engine recycles projectile objects, so an entry that outlived its unbind
+    // could otherwise hand back someone else's projectile. Confirm the binding still
+    // points where the index says before acting on it.
+    if (controlledProj->GetGameProjectile().GetProjectile() != proj) {
+        m_projectileIndex.erase(indexed);
+        return nullptr;
+    }
+
+    return controlledProj.get();
 }
 
 bool ProjectileSubsystem::FireProjectileFor(ControlledProjectile* controlledProj) {

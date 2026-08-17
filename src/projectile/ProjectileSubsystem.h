@@ -68,6 +68,12 @@ private:
     // Find a ControlledProjectile by its game projectile pointer (for hook routing)
     ControlledProjectile* FindByGameProjectile(RE::Projectile* proj);
 
+    // Keep the game-projectile index in step with what is actually bound. Called by
+    // ControlledProjectile around every bind and unbind, which are the only places a
+    // RE::Projectile* is attached to or detached from one of ours.
+    void IndexProjectile(RE::Projectile* proj, const UUID& uuid);
+    void UnindexProjectile(RE::Projectile* proj);
+
     // Get game forms
     RE::TESObjectWEAP* GetWeaponForm();
     RE::TESObjectREFR* GetCasterReference();
@@ -77,6 +83,13 @@ private:
 
     // Map UUID -> ControlledProjectile (weak refs, shared_ptr owned externally)
     std::unordered_map<UUID, std::weak_ptr<ControlledProjectile>, UUID::Hash> m_projectiles;
+
+    // Reverse index: game projectile -> which of ours owns it. The hook calls
+    // OnProjectileUpdate for every projectile in the world, several times a frame, so
+    // this lookup has to be O(1) - scanning m_projectiles instead made the per-frame
+    // cost quadratic in the number of live elements, which froze the game outright
+    // once a menu got past a few hundred.
+    std::unordered_map<RE::Projectile*, UUID> m_projectileIndex;
 
     bool m_initialized = false;
 
