@@ -1,5 +1,6 @@
-Unreleased
-**No API change** - interface version stays 0.10.1.0, consumers do not need a rebuild.
+0.10.3
+**No API change** - interface version 0.10.3.0. Nothing in the header moved, so
+consumers built against any 0.10.x keep working without a rebuild.
 - Mesh preflight: every model path is inspected before it goes on a form and reaches
   the game's model loader. A mesh that would crash the loader is swapped for
   `meshes\3DUI\orb.nif` and the reason is logged; the element keeps its place in the

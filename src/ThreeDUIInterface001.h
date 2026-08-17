@@ -605,10 +605,15 @@ struct Root : Container {
 // 0.10.1.0 added Container::RemoveChild in the _container_reserved1 slot. That is
 // additive, so it is a patch bump: every consumer built against 0.10.0.0 keeps
 // working against it without a rebuild.
+//
+// 0.10.3.0 adds the mesh preflight check. Nothing in this header moved - no slot
+// consumed, no struct grown - so it is a patch bump for the same reason: consumers
+// built against any 0.10.x keep working untouched. The number moves anyway so the
+// release is distinguishable in MO2 and on Nexus.
 constexpr uint32_t P3DUI_INTERFACE_VERSION =
     0 * 1000000 +
     10 * 10000 +
-    1 * 100 +
+    3 * 100 +
     0;
 
 struct Interface001 {
