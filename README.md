@@ -45,7 +45,7 @@ This library is well suited for everything that can be built using a composition
 | Use Case | Why |
 |----------|-----|
 | Complex text layouts | Text is supported and can be positioned like any other element, but precise text-heavy layouts would be difficult |
-| 50–100+ simultaneous elements | Not a hard limit, but going higher may push the engine's limits |
+| 50–100+ simultaneous elements | Not a hard limit, but going higher may push the engine's limits. Exception: The provided scrollable menus work with thousands of items, as no more than ~30 Elements are ever visible at a time |
 | Rendering lines | No line-drawing primitives available |
 
 ## Quick Links
