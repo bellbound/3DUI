@@ -88,6 +88,7 @@ if(BUILD_TESTS)
         "${CMAKE_SOURCE_DIR}/src/projectile/TransformSmoother.cpp"
         "${CMAKE_SOURCE_DIR}/src/projectile/GameProjectile.cpp"
         "${CMAKE_SOURCE_DIR}/src/projectile/FormManager.cpp"
+        "${CMAKE_SOURCE_DIR}/src/projectile/MeshPreflight.cpp"
     )
 
     # Create test executable

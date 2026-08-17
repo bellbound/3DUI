@@ -14,6 +14,7 @@ set(headers ${headers}
     src/projectile/InteractionController.h
     src/projectile/DriverUpdateManager.h
     src/projectile/ProjectileCleanupManager.h
+    src/projectile/MeshPreflight.h
     src/api/WrapperTypes.h
     src/ThreeDUIActorMenu.h
 )

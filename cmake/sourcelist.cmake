@@ -7,6 +7,7 @@ set(sources ${sources}
     src/higgsinterface001.cpp
     src/projectile/Anchor.cpp
     src/projectile/FormManager.cpp
+    src/projectile/MeshPreflight.cpp
     src/projectile/GameProjectile.cpp
     src/projectile/ControlledProjectile.cpp
     src/projectile/ControlledLight.cpp

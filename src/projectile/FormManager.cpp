@@ -1,7 +1,15 @@
 #include "FormManager.h"
+#include "MeshPreflight.h"
 #include "../log.h"
 
 namespace Projectile {
+
+namespace {
+// Stand-in for a mesh we refuse to load. One of our own assets, so it is always
+// present and always passes inspection. Showing it beats leaving a hole in the
+// layout: the element keeps its slot and the user can see which item is broken.
+constexpr const char* kPlaceholderModel = "meshes\\3DUI\\orb.nif";
+}  // namespace
 
 void FormManager::Initialize(std::vector<RE::BGSProjectile*> projForms,
                               std::vector<RE::TESAmmo*> ammoForms) {
@@ -40,7 +48,18 @@ void FormManager::Shutdown() {
     spdlog::info("FormManager shut down");
 }
 
-int FormManager::AcquireForm(const std::string& modelPath) {
+int FormManager::AcquireForm(const std::string& requestedModel) {
+    // Screen the mesh before we take the lock. A malformed NIF crashes the game inside
+    // its own loader, on a thread we cannot guard, so the only place to stop it is
+    // before the path lands on a form. MeshPreflight reads the file the first time it
+    // sees a path and caches the verdict, and we do not want that read under m_mutex.
+    std::string modelPath = requestedModel;
+    if (!MeshPreflight::IsSafeToLoad(modelPath)) {
+        spdlog::warn("[MeshPreflight] not rendering '{}' - substituting '{}'",
+            requestedModel, kPlaceholderModel);
+        modelPath = kPlaceholderModel;
+    }
+
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
     if (!m_initialized) {

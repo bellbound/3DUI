@@ -42,7 +42,10 @@ public:
     // If model already assigned to a form, reuses it (refCount++).
     // Otherwise assigns to a free form and sets the model.
     // Returns formIndex, or -1 if no form available.
-    int AcquireForm(const std::string& modelPath);
+    // The mesh is screened by MeshPreflight first: one that would crash the game's
+    // loader is swapped for a placeholder, so the returned form may carry a different
+    // model than the one asked for.
+    int AcquireForm(const std::string& requestedModel);
 
     // Release a form. Decrements refCount.
     // If refCount hits 0, form becomes available for reassignment.
