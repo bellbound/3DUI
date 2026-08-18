@@ -3,6 +3,12 @@
 
 namespace P3DUI {
 
+namespace {
+    // Internal scale multiplier: user scale 1.0 = effective 1.25 (VR-readable size).
+    // Applied by both the constructor and SetScale so the two agree.
+    constexpr float kUserScaleToText = 1.25f;
+}
+
 // =============================================================================
 // TextWrapper Implementation
 // =============================================================================
@@ -19,8 +25,7 @@ TextWrapper::TextWrapper(const TextConfig& config)
     if (config.text && *config.text) {
         m_impl->SetText(std::wstring(config.text));
     }
-    // Internal scale multiplier: user scale 1.0 = effective 1.25 (VR-readable size)
-    m_impl->SetTextScale(config.scale * 1.25f);
+    m_impl->SetTextScale(config.scale * kUserScaleToText);
 
     // Match smoothing behavior of other UI elements (icons, buttons)
     // This ensures text moves smoothly when its parent container animates
@@ -92,7 +97,7 @@ const wchar_t* TextWrapper::GetText() {
 
 void TextWrapper::SetScale(float scale) {
     if (m_destroyed) return;
-    m_impl->SetTextScale(scale);
+    m_impl->SetTextScale(scale * kUserScaleToText);
 }
 
 void TextWrapper::SetFacingMode(FacingMode /*mode*/) {

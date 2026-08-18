@@ -86,6 +86,12 @@ public:
     // Called from ControlledProjectile::Update() which runs on the main thread.
     void ApplyPendingTexture();
 
+    // Effect-shader tint. Multiplies the base colour of every BSEffectShaderProperty
+    // in the model; glow multiplies its emissive strength. Applied on a later frame
+    // like the texture is, because the 3D node does not exist yet when this is set.
+    void SetEffectColor(float r, float g, float b, float a, float glow);
+    void ApplyPendingColor();
+
     // Mark for deletion - projectile will be hidden and released
     void MarkForDeletion();
     bool IsMarkedForDeletion() const { return m_markedForDeletion; }
@@ -94,9 +100,21 @@ public:
     void SetAssignmentTime(uint64_t time) { m_assignmentTime = time; }
     uint64_t GetAssignmentTime() const { return m_assignmentTime; }
 
+    // Where the model's geometry actually sits relative to the node it hangs off, in model
+    // space. Zero for a mesh authored around its origin, which is what a ground object is
+    // supposed to be; large for one that is not - a worn armour mesh used as a ground model
+    // carries its skeleton-space position, so it draws up at chest height. Measured once
+    // from the loaded 3D and then subtracted, so the model lands centred on the element
+    // rather than hanging off it. Zero until the 3D exists.
+    const RE::NiPoint3& GetModelCenter() const { return m_modelCenter; }
+
 private:
     void ZeroVelocity();
     void UpdateNodeTransform();
+
+    // Fills m_modelCenter from the loaded geometry the first time it can. Cheap: the engine
+    // has already computed each geometry's model bound, so nothing walks vertices.
+    void MeasureModelCenter(RE::NiAVObject* node);
 
     // Validates that m_projectile still exists in the game world by checking refHandle.
     // Returns true if projectile is valid, false if game destroyed it.
@@ -121,9 +139,21 @@ private:
     bool m_needsTextureSet = false;  // Flag for pending texture application
     int m_textureRetryCount = 0;     // Counter for texture application retries
     static constexpr int MAX_TEXTURE_RETRIES = 50;  // Give up after this many attempts
+    float m_effectColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};  // Tint for effect-shader materials
+    float m_effectGlow = 1.0f;       // Emissive multiplier for the same
+    bool m_hasEffectColor = false;   // A tint was set at least once (re-arm on rebind)
+    bool m_needsColorSet = false;    // Flag for pending tint application
+    int m_colorRetryCount = 0;       // Counter for tint application retries
     bool m_visible = true;
     bool m_markedForDeletion = false;
     uint64_t m_assignmentTime = 0;
+
+    // Zero unless the model is being recentred, so the per-frame transform pays nothing for
+    // the overwhelming majority of meshes, which are authored around their own origin.
+    RE::NiPoint3 m_modelCenter{0.0f, 0.0f, 0.0f};
+    bool m_modelCenterMeasured = false;  // Latched: the mesh does not move once loaded
+    int m_modelCenterAttempts = 0;
+    static constexpr int MAX_MODEL_CENTER_ATTEMPTS = 10;
 };
 
 // Helper functions for projectile creation

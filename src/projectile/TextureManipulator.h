@@ -33,6 +33,13 @@ public:
     // Set the texture on a node's material (for effect shaders)
     static bool SetTexture(RE::NiAVObject* node, const char* texturePath);
 
+    // Tint every BSEffectShaderProperty geometry in the subtree rooted at `root`.
+    // rgb/a multiply the material's authored base colour, glow its base colour scale
+    // (the emissive multiplier). Returns how many geometries were tinted - 0 means the
+    // mesh has no effect-shader material and cannot be tinted this way.
+    static int SetEffectColor(RE::NiAVObject* root,
+                              float r, float g, float b, float a, float glow);
+
     // =========================================================================
     // Character Node Access
     // =========================================================================

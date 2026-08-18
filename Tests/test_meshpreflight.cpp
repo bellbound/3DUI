@@ -125,6 +125,25 @@ const std::vector<Block> kUnskinnedDynamicMesh = {
     {"NiAlphaProperty", 15},
 };
 
+// A worn armour mesh republished as a ground object: the bone nodes are gone but the
+// skin instances that pointed at them are still on the shapes. Block for block this is
+// ZaZ's HandCuffsIron_go.nif, which took the model loader down on a load thread.
+const std::vector<Block> kSkinnedNoBonesMesh = {
+    {"BSFadeNode", 96},
+    {"bhkCompressedMeshShapeData", 4894},
+    {"bhkCompressedMeshShape", 56},
+    {"bhkMoppBvTreeShape", 1033},
+    {"bhkRigidBody", 250},
+    {"bhkCollisionObject", 10},
+    {"BSTriShape", 120},
+    {"BSDismemberSkinInstance", 24},
+    {"NiSkinData", 3111},
+    {"NiSkinPartition", 12062},
+    {"BSXFlags", 8},
+    {"BSLightingShaderProperty", 104},
+    {"BSShaderTextureSet", 199},
+};
+
 }  // namespace
 
 TEST_CASE("MeshPreflight accepts healthy meshes", "[meshpreflight]") {
@@ -168,6 +187,45 @@ TEST_CASE("MeshPreflight rejects the loader crash signature", "[meshpreflight]")
     SECTION("A skin block anywhere in the file clears it") {
         auto blocks = kUnskinnedDynamicMesh;
         blocks.push_back({"NiSkinPartition", 2048});
+        REQUIRE(InspectComplete(blocks).verdict == Verdict::Ok);
+    }
+}
+
+TEST_CASE("MeshPreflight rejects a skin with no bones to resolve", "[meshpreflight]") {
+    const auto result = InspectComplete(kSkinnedNoBonesMesh);
+
+    SECTION("Verdict names the cause") {
+        REQUIRE(result.verdict == Verdict::SkinnedWithoutBones);
+    }
+
+    SECTION("Detail points at the offending block") {
+        REQUIRE(result.detail.find("block 7") != std::string::npos);
+        REQUIRE(result.detail.find("BSDismemberSkinInstance") != std::string::npos);
+    }
+
+    SECTION("A single bone node clears it") {
+        auto blocks = kSkinnedNoBonesMesh;
+        blocks.push_back({"NiNode", 80});
+        REQUIRE(InspectComplete(blocks).verdict == Verdict::Ok);
+    }
+
+    SECTION("The BSFadeNode root does not count as one") {
+        const std::vector<Block> blocks = {
+            {"BSFadeNode", 96},
+            {"BSTriShape", 120},
+            {"NiSkinInstance", 16},
+            {"NiSkinData", 512},
+        };
+        REQUIRE(InspectComplete(blocks).verdict == Verdict::SkinnedWithoutBones);
+    }
+
+    SECTION("Skin data without an instance is left alone") {
+        // Orphan skin blocks have no bone array for the loader to walk.
+        const std::vector<Block> blocks = {
+            {"BSFadeNode", 96},
+            {"BSTriShape", 4096},
+            {"NiSkinPartition", 2048},
+        };
         REQUIRE(InspectComplete(blocks).verdict == Verdict::Ok);
     }
 }

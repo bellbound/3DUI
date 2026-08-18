@@ -277,6 +277,12 @@ public:
         return m_localScale;
     }
 
+    // The part of this node's world scale that exists only to make its own mesh come out
+    // a sensible size - the fit correction derived from the model's bounds. It is folded
+    // into GetWorldScale like any other factor, so a child that is furniture rather than
+    // part of the model (a backdrop plate) divides it back out. 1.0 for a node with none.
+    virtual float GetModelFitScale() const { return 1.0f; }
+
     // === Initialization ===
     // Called by the driver when the hierarchy is spawned
     // Override in derived classes to acquire resources (forms, lights, etc.)

@@ -5,6 +5,8 @@
 #include "../log.h"
 #include "../util/VRNodes.h"
 
+#include <cmath>
+
 namespace Projectile {
 
 GameProjectile::~GameProjectile() {
@@ -19,13 +21,21 @@ GameProjectile::GameProjectile(GameProjectile&& other) noexcept
     , m_texturePath(std::move(other.m_texturePath))
     , m_borderColor(std::move(other.m_borderColor))
     , m_needsTextureSet(other.m_needsTextureSet)
+    , m_effectGlow(other.m_effectGlow)
+    , m_hasEffectColor(other.m_hasEffectColor)
+    , m_needsColorSet(other.m_needsColorSet)
     , m_visible(other.m_visible)
     , m_markedForDeletion(other.m_markedForDeletion)
     , m_assignmentTime(other.m_assignmentTime)
+    , m_modelCenter(other.m_modelCenter)
+    , m_modelCenterMeasured(other.m_modelCenterMeasured)
 {
+    std::copy(std::begin(other.m_effectColor), std::end(other.m_effectColor), std::begin(m_effectColor));
+
     other.m_projectile = nullptr;
     other.m_refHandle = 0;
     other.m_needsTextureSet = false;
+    other.m_needsColorSet = false;
 }
 
 GameProjectile& GameProjectile::operator=(GameProjectile&& other) noexcept {
@@ -38,13 +48,20 @@ GameProjectile& GameProjectile::operator=(GameProjectile&& other) noexcept {
         m_texturePath = std::move(other.m_texturePath);
         m_borderColor = std::move(other.m_borderColor);
         m_needsTextureSet = other.m_needsTextureSet;
+        std::copy(std::begin(other.m_effectColor), std::end(other.m_effectColor), std::begin(m_effectColor));
+        m_effectGlow = other.m_effectGlow;
+        m_hasEffectColor = other.m_hasEffectColor;
+        m_needsColorSet = other.m_needsColorSet;
         m_visible = other.m_visible;
         m_markedForDeletion = other.m_markedForDeletion;
         m_assignmentTime = other.m_assignmentTime;
+        m_modelCenter = other.m_modelCenter;
+        m_modelCenterMeasured = other.m_modelCenterMeasured;
 
         other.m_projectile = nullptr;
         other.m_refHandle = 0;
         other.m_needsTextureSet = false;
+        other.m_needsColorSet = false;
     }
     return *this;
 }
@@ -86,6 +103,18 @@ void GameProjectile::BindToProjectile(RE::Projectile* proj) {
         m_textureRetryCount = 0;
         spdlog::trace("GameProjectile::BindToProjectile - Reset m_needsTextureSet for texture '{}'", m_texturePath);
     }
+
+    // Same reasoning for the tint: the new projectile has a new 3D node whose material
+    // is back at the mesh's authored colour.
+    if (m_hasEffectColor) {
+        m_needsColorSet = true;
+        m_colorRetryCount = 0;
+    }
+
+    // And for the model's centre: a new node, possibly a new mesh on the form.
+    m_modelCenterMeasured = false;
+    m_modelCenterAttempts = 0;
+    m_modelCenter = {0.0f, 0.0f, 0.0f};
 
     PreventDestruction();
 
@@ -210,6 +239,170 @@ void GameProjectile::ZeroVelocity() {
     }
 }
 
+#if !defined(TEST_ENVIRONMENT)
+namespace {
+
+// Rotation, translation and scale of a node relative to the root of the walk. Composed by
+// hand rather than through NiTransform's operator*, which is one of the game's own functions
+// reached by address - not something to put on a per-mesh path in VR when the arithmetic is
+// four lines.
+struct RelativeTransform {
+    RE::NiMatrix3 rotate = IdentityMatrix3();
+    RE::NiPoint3  translate{0.0f, 0.0f, 0.0f};
+    float         scale = 1.0f;
+};
+
+RE::NiMatrix3 MultiplyRotations(const RE::NiMatrix3& a, const RE::NiMatrix3& b) {
+    RE::NiMatrix3 result;
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            result.entry[row][col] = a.entry[row][0] * b.entry[0][col] +
+                                     a.entry[row][1] * b.entry[1][col] +
+                                     a.entry[row][2] * b.entry[2][col];
+        }
+    }
+    return result;
+}
+
+// Rotate and scale a model-space offset into the space the node draws in.
+RE::NiPoint3 RotateAndScale(const RE::NiMatrix3& r, const RE::NiPoint3& point, float scale) {
+    return RE::NiPoint3{
+        (r.entry[0][0] * point.x + r.entry[0][1] * point.y + r.entry[0][2] * point.z) * scale,
+        (r.entry[1][0] * point.x + r.entry[1][1] * point.y + r.entry[1][2] * point.z) * scale,
+        (r.entry[2][0] * point.x + r.entry[2][1] * point.y + r.entry[2][2] * point.z) * scale};
+}
+
+RE::NiPoint3 Apply(const RelativeTransform& transform, const RE::NiPoint3& point) {
+    const RE::NiMatrix3& r = transform.rotate;
+    const RE::NiPoint3 scaled{point.x * transform.scale, point.y * transform.scale,
+                              point.z * transform.scale};
+    return RE::NiPoint3{
+        r.entry[0][0] * scaled.x + r.entry[0][1] * scaled.y + r.entry[0][2] * scaled.z +
+            transform.translate.x,
+        r.entry[1][0] * scaled.x + r.entry[1][1] * scaled.y + r.entry[1][2] * scaled.z +
+            transform.translate.y,
+        r.entry[2][0] * scaled.x + r.entry[2][1] * scaled.y + r.entry[2][2] * scaled.z +
+            transform.translate.z};
+}
+
+RelativeTransform Compose(const RelativeTransform& parent, const RE::NiTransform& local) {
+    RelativeTransform result;
+    result.rotate = MultiplyRotations(parent.rotate, local.rotate);
+    result.translate = Apply(parent, local.translate);
+    result.scale = parent.scale * local.scale;
+    return result;
+}
+
+// Union of every geometry's model bound, expressed in the root's own space. Model bounds are
+// filled in by the engine when the mesh loads, so this reads what the NIF authored without
+// touching a vertex. Spheres are unioned as boxes - approximate at the corners, exact enough
+// for "where is the middle of this thing".
+void AccumulateModelBound(RE::NiAVObject* object, const RelativeTransform& toRoot,
+                          RE::NiPoint3& min, RE::NiPoint3& max, bool& any) {
+    if (!object) return;
+
+    if (auto* geometry = object->AsGeometry(); geometry && !geometry->AsParticlesGeom()) {
+        const RE::NiBound& bound = geometry->GetModelData().modelBound;
+        if (bound.radius > 0.0f) {
+            const RE::NiPoint3 center = Apply(toRoot, bound.center);
+            const float extent = bound.radius * toRoot.scale;
+            const RE::NiPoint3 low{center.x - extent, center.y - extent, center.z - extent};
+            const RE::NiPoint3 high{center.x + extent, center.y + extent, center.z + extent};
+
+            if (!any) {
+                min = low;
+                max = high;
+                any = true;
+            } else {
+                if (low.x < min.x) min.x = low.x;
+                if (low.y < min.y) min.y = low.y;
+                if (low.z < min.z) min.z = low.z;
+                if (high.x > max.x) max.x = high.x;
+                if (high.y > max.y) max.y = high.y;
+                if (high.z > max.z) max.z = high.z;
+            }
+        }
+    }
+
+    if (auto* asNode = object->AsNode()) {
+        for (auto& child : asNode->GetChildren()) {
+            if (!child) continue;
+            AccumulateModelBound(child.get(), Compose(toRoot, child->local), min, max, any);
+        }
+    }
+}
+
+}  // namespace
+#endif
+
+void GameProjectile::MeasureModelCenter(RE::NiAVObject* node) {
+#if !defined(TEST_ENVIRONMENT)
+    if (m_modelCenterMeasured || !node) {
+        return;
+    }
+
+    // The root's own local transform is ours - we write it every frame - so the walk starts
+    // from identity and only accumulates what the mesh itself declares.
+    RE::NiPoint3 min{}, max{};
+    bool any = false;
+    AccumulateModelBound(node, RelativeTransform{}, min, max, any);
+
+    // Nothing measurable - the mesh may still be streaming in, so try again next frame. But
+    // only a few times: a mesh that genuinely has no measurable geometry (empty.nif, or one
+    // whose bounds the engine never fills) would otherwise re-walk its node tree every frame
+    // for as long as the element lives.
+    if (!any) {
+        if (++m_modelCenterAttempts >= MAX_MODEL_CENTER_ATTEMPTS) {
+            m_modelCenterMeasured = true;  // latch at zero: nothing to recentre
+            spdlog::trace("[CENTER] '{}' has no measurable geometry after {} frames; leaving it "
+                "where it is", m_modelPath, m_modelCenterAttempts);
+        }
+        return;
+    }
+
+    m_modelCenterMeasured = true;
+
+    const RE::NiPoint3 center{(min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f,
+                              (min.z + max.z) * 0.5f};
+    const float distance = std::sqrt(center.x * center.x + center.y * center.y +
+                                     center.z * center.z);
+
+    // Whether to correct at all is decided against the model's own size, not against a fixed
+    // number of units: "is the origin the mesh was authored around" has no absolute scale.
+    // The test is whether the geometry's bounding sphere still contains that origin. A mesh
+    // authored around its origin does, however large or small it is - orb.nif's assorted
+    // billboards average out ~3 units off a ~28 unit radius, which is authored intent and is
+    // left alone. A worn armour mesh pressed into service as a ground model does not: the
+    // Bandolier sits 97 units up with a 21 unit radius, 4.6x outside its own sphere.
+    //
+    // Erring towards leaving meshes alone is deliberate. Recentring something that was
+    // authored slightly off-origin on purpose is a regression on a mesh nobody complained
+    // about; failing to recentre one that is only mildly off costs a barely visible offset.
+    const float radius = 0.5f * std::sqrt((max.x - min.x) * (max.x - min.x) +
+                                          (max.y - min.y) * (max.y - min.y) +
+                                          (max.z - min.z) * (max.z - min.z));
+
+    if (distance <= radius) {
+        spdlog::trace("[CENTER] '{}' contains its own origin ({:.1f} off, {:.1f} radius); "
+            "leaving it where it is", m_modelPath, distance, radius);
+        return;
+    }
+
+    m_modelCenter = center;
+
+    // Worth a line at info: an off-centre model is invisible in the code and looks like a
+    // layout bug in the headset. A worn armour mesh used as a ground model - the ARMO's world
+    // model pointing at an armour addon's _0.nif - is the usual cause, and it shows up here as
+    // a Z of roughly chest height. Nothing else in the log names the mesh and the offset
+    // together, which is what makes this diagnosable at all.
+    spdlog::info("[CENTER] '{}' is {:.1f} units off its origin with a {:.1f} unit radius - "
+        "geometry misses the origin entirely, recentring it on the element ({:.1f}, {:.1f}, "
+        "{:.1f})", m_modelPath, distance, radius, center.x, center.y, center.z);
+#else
+    (void)node;
+#endif
+}
+
 void GameProjectile::UpdateNodeTransform() {
     if (!m_projectile) {
         return;
@@ -220,12 +413,29 @@ void GameProjectile::UpdateNodeTransform() {
         return;
     }
 
-    // Update node position
-    node->local.translate = m_targetTransform.position;
-    node->world.translate = m_targetTransform.position;
+    MeasureModelCenter(node);
 
     // Update scale
     float effectiveScale = m_visible ? m_targetTransform.scale : 0.00001f;
+
+    // Update node position. The model's own off-centre-ness is taken back out here rather
+    // than at the element: it is a property of the mesh, and every caller that positions an
+    // element wants the model to appear where it put it. Rotation and scale apply to the
+    // offset too, since that is how the node will draw the geometry.
+    RE::NiPoint3 position = m_targetTransform.position;
+#if !defined(TEST_ENVIRONMENT)
+    if (m_modelCenter.x != 0.0f || m_modelCenter.y != 0.0f || m_modelCenter.z != 0.0f) {
+        const RE::NiPoint3 offset =
+            RotateAndScale(m_targetTransform.rotation, m_modelCenter, effectiveScale);
+        position.x -= offset.x;
+        position.y -= offset.y;
+        position.z -= offset.z;
+    }
+#endif
+
+    node->local.translate = position;
+    node->world.translate = position;
+
     node->local.scale = effectiveScale;
 
     // Update rotation - apply matrix directly to node
@@ -321,6 +531,56 @@ void GameProjectile::SetTexturePath(const std::string& path) {
 
 void GameProjectile::SetBorderColor(const std::string& hexColor) {
     m_borderColor = hexColor;
+}
+
+void GameProjectile::SetEffectColor(float r, float g, float b, float a, float glow) {
+    m_effectColor[0] = r;
+    m_effectColor[1] = g;
+    m_effectColor[2] = b;
+    m_effectColor[3] = a;
+    m_effectGlow = glow;
+    m_hasEffectColor = true;
+    m_needsColorSet = true;
+    m_colorRetryCount = 0;
+}
+
+void GameProjectile::ApplyPendingColor() {
+#if !defined(TEST_ENVIRONMENT)
+    if (!m_needsColorSet) {
+        return;
+    }
+
+    auto* node = m_projectile ? m_projectile->Get3D() : nullptr;
+    if (!node) {
+        return;  // Not spawned yet, try again next frame
+    }
+
+    ++m_colorRetryCount;
+    if (m_colorRetryCount > MAX_TEXTURE_RETRIES) {
+        spdlog::error("GameProjectile::ApplyPendingColor - Exceeded {} retries, giving up",
+            MAX_TEXTURE_RETRIES);
+        m_needsColorSet = false;
+        m_colorRetryCount = 0;
+        return;
+    }
+
+    // Unlike the texture path this walks the whole subtree rather than looking for the
+    // icon template's container node: a backdrop mesh is a plain BSFadeNode with the
+    // geometry hanging straight off it, so there is no container to find.
+    const int applied = TextureManipulator::SetEffectColor(
+        node, m_effectColor[0], m_effectColor[1], m_effectColor[2], m_effectColor[3], m_effectGlow);
+
+    if (applied > 0) {
+        m_needsColorSet = false;
+        m_colorRetryCount = 0;
+        spdlog::trace("GameProjectile::ApplyPendingColor - tinted {} geometries", applied);
+    }
+    // No effect-shader geometry found: the mesh cannot be tinted (a lighting-shader
+    // backdrop, say). Retry until the cap, then stop asking.
+#else
+    m_needsColorSet = false;
+    m_colorRetryCount = 0;
+#endif
 }
 
 void GameProjectile::MarkForDeletion() {

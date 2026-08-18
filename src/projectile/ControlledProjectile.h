@@ -60,7 +60,9 @@ public:
     void SetModelPath(const std::string& path) { m_modelPath = path; }
     const std::string& GetModelPath() const { return m_modelPath; }
 
-    void SetTexturePath(const std::string& path) { m_texturePath = path; }
+    // Not inline: a texture set after the element is live has to reach the bound game
+    // projectile as well, and that lives in the .cpp.
+    void SetTexturePath(const std::string& path);
     const std::string& GetTexturePath() const { return m_texturePath; }
 
     void SetBorderColor(const std::string& color) { m_borderColor = color; }
@@ -74,6 +76,7 @@ public:
 
     void SetScaleCorrection(float correction) { m_scaleCorrection = correction; }
     float GetScaleCorrection() const { return m_scaleCorrection; }
+    float GetModelFitScale() const override { return m_scaleCorrection; }
 
     // Rotation correction in DEGREES (pitch, roll, yaw) applied in model space
     void SetRotationCorrection(const RE::NiPoint3& euler) { m_rotationCorrection = euler; }
@@ -105,8 +108,14 @@ public:
     // Background is non-interactive and follows primary's visibility lifecycle
     void SetBackgroundModelPath(const std::string& path);
     void SetBackgroundScale(float scale);
+    void SetBackgroundColor(float r, float g, float b, float a, float glow);
     void ClearBackground();
     ControlledProjectile* GetBackground() const { return m_background.get(); }
+
+    // === Effect Shader Tint ===
+    // Multiplies the base colour of every BSEffectShaderProperty in this projectile's
+    // model. Stored so it can be re-applied each time the projectile respawns.
+    void SetEffectColor(float r, float g, float b, float a, float glow);
 
     // === Label Text ===
     // Optional text rendered below the projectile using TextDriver
@@ -237,9 +246,18 @@ private:
     std::string m_modelPath;
     std::string m_texturePath;
     std::string m_borderColor;
+    // Effect-shader tint, applied to this projectile's own model. Only meaningful for
+    // a mesh with a BSEffectShaderProperty; identity (white, glow 1) until set.
+    float m_effectColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float m_effectGlow = 1.0f;
+    bool m_hasEffectColor = false;
     std::wstring m_text;
     float m_baseScale = 1.0f;
     float m_scaleCorrection = 1.0f;
+    // Set on the child EnsureBackground() makes: a backdrop is a plate behind the element,
+    // so it takes the element's position, rotation and hover growth but not the fit
+    // correction that only exists to size the element's own mesh. See GetWorldScale().
+    bool m_ignoresParentModelFit = false;
     RE::NiPoint3 m_rotationCorrection{0, 0, 0};  // Degrees (pitch, roll, yaw)
 
     // Behavior flags

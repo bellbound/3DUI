@@ -531,6 +531,14 @@ void ColumnGridWrapper::SetOrigin(VerticalOrigin verticalOrigin, HorizontalOrigi
     m_impl->SetOrigin(verticalOrigin, horizontalOrigin);
 }
 
+void ColumnGridWrapper::SetVisibleExtent(float extent) {
+    if (m_destroyed) return;
+    if (extent <= 0.0f) return;
+    m_impl->SetVisibleWidth(extent);
+    // A narrower window can leave the current offset past the new end
+    m_impl->SetScrollOffset(m_impl->GetScrollOffset());
+}
+
 // =============================================================================
 // RowGridWrapper Implementation
 // =============================================================================
@@ -697,6 +705,14 @@ void RowGridWrapper::SetFillDirection(VerticalFill verticalFill, HorizontalFill 
 void RowGridWrapper::SetOrigin(VerticalOrigin verticalOrigin, HorizontalOrigin horizontalOrigin) {
     if (m_destroyed) return;
     m_impl->SetOrigin(verticalOrigin, horizontalOrigin);
+}
+
+void RowGridWrapper::SetVisibleExtent(float extent) {
+    if (m_destroyed) return;
+    if (extent <= 0.0f) return;
+    m_impl->SetVisibleHeight(extent);
+    // A shorter window can leave the current offset past the new end
+    m_impl->SetScrollOffset(m_impl->GetScrollOffset());
 }
 
 } // namespace P3DUI

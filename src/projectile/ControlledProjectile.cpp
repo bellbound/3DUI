@@ -22,9 +22,12 @@ ControlledProjectile::ControlledProjectile(ControlledProjectile&& other) noexcep
     , m_modelPath(std::move(other.m_modelPath))
     , m_texturePath(std::move(other.m_texturePath))
     , m_borderColor(std::move(other.m_borderColor))
+    , m_effectGlow(other.m_effectGlow)
+    , m_hasEffectColor(other.m_hasEffectColor)
     , m_text(std::move(other.m_text))
     , m_baseScale(other.m_baseScale)
     , m_scaleCorrection(other.m_scaleCorrection)
+    , m_ignoresParentModelFit(other.m_ignoresParentModelFit)
     , m_rotationCorrection(other.m_rotationCorrection)
     , m_isAnchorHandle(other.m_isAnchorHandle)
     , m_closeOnActivate(other.m_closeOnActivate)
@@ -53,6 +56,8 @@ ControlledProjectile::ControlledProjectile(ControlledProjectile&& other) noexcep
     , m_labelTextVisible(other.m_labelTextVisible)
     , m_labelOffset(other.m_labelOffset)
 {
+    std::copy(std::begin(other.m_effectColor), std::end(other.m_effectColor), std::begin(m_effectColor));
+
     other.m_subsystem = nullptr;
     other.m_uuid = UUID::Invalid();
     other.m_formIndex = -1;
@@ -79,9 +84,13 @@ ControlledProjectile& ControlledProjectile::operator=(ControlledProjectile&& oth
         m_modelPath = std::move(other.m_modelPath);
         m_texturePath = std::move(other.m_texturePath);
         m_borderColor = std::move(other.m_borderColor);
+        std::copy(std::begin(other.m_effectColor), std::end(other.m_effectColor), std::begin(m_effectColor));
+        m_effectGlow = other.m_effectGlow;
+        m_hasEffectColor = other.m_hasEffectColor;
         m_text = std::move(other.m_text);
         m_baseScale = other.m_baseScale;
         m_scaleCorrection = other.m_scaleCorrection;
+        m_ignoresParentModelFit = other.m_ignoresParentModelFit;
         m_rotationCorrection = other.m_rotationCorrection;
         m_isAnchorHandle = other.m_isAnchorHandle;
         m_closeOnActivate = other.m_closeOnActivate;
@@ -151,6 +160,19 @@ float ControlledProjectile::GetWorldScale() const {
     // Then apply baseScale (user-defined), scaleCorrection (from bounds), and hover scale as final multipliers
     // Final scale = parentWorldScale * localScale * baseScale * scaleCorrection * hoverScale
     float parentScale = m_parent ? m_parent->GetWorldScale() * m_localScale : m_localScale;
+
+    // A backdrop takes everything from the element in front of it except how big that
+    // element's own mesh had to be scaled to fit the layout. That fit correction is
+    // derived from the model's bounds, so inheriting it made the plate behind a ring and
+    // the plate behind a greatsword different sizes - a whole row of them read as the
+    // backdrops being wrong rather than as the models being different.
+    if (m_ignoresParentModelFit && m_parent) {
+        const float fit = m_parent->GetModelFitScale();
+        if (fit > 0.0001f) {
+            parentScale /= fit;
+        }
+    }
+
     return parentScale * m_baseScale * m_scaleCorrection * m_hoverScale;
 }
 
@@ -553,6 +575,7 @@ void ControlledProjectile::Update(float deltaTime) {
     // This was previously called from ApplyTransform() on hook threads, causing crashes
     if (m_bindState.load() == BindState::Bound) {
         m_gameProjectile.ApplyPendingTexture();
+        m_gameProjectile.ApplyPendingColor();
     }
 
     // Update background if present
@@ -652,6 +675,13 @@ void ControlledProjectile::Initialize() {
     if (!m_texturePath.empty()) {
         m_gameProjectile.SetTexturePath(m_texturePath);
         m_gameProjectile.SetBorderColor(m_borderColor);
+    }
+
+    // Re-arm the tint: a projectile that was destroyed and re-initialised gets a fresh
+    // 3D node, and the colour lives on that node's material, not on us.
+    if (m_hasEffectColor) {
+        m_gameProjectile.SetEffectColor(m_effectColor[0], m_effectColor[1],
+                                        m_effectColor[2], m_effectColor[3], m_effectGlow);
     }
 
     // Register with subsystem (stores weak reference via shared_from_this)
@@ -781,6 +811,7 @@ void ControlledProjectile::EnsureBackground() {
     m_background->SetActivateable(false);
     m_background->SetUseHapticFeedback(false);
     m_background->SetLocalPosition({0, 0, 0});  // Same position as primary
+    m_background->m_ignoresParentModelFit = true;
 }
 
 void ControlledProjectile::SetBackgroundModelPath(const std::string& path) {
@@ -801,6 +832,43 @@ void ControlledProjectile::SetBackgroundScale(float scale) {
     if (m_background) {
         m_background->SetBaseScale(scale);
     }
+}
+
+void ControlledProjectile::SetBackgroundColor(float r, float g, float b, float a, float glow) {
+    // Deliberately does not create the background: a tint with no backdrop model has
+    // nothing to colour, and creating one here would spawn an untextured projectile.
+    if (m_background) {
+        m_background->SetEffectColor(r, g, b, a, glow);
+    }
+}
+
+// Initialize() hands the texture to the game projectile once, on the way to firing it.
+// Anything set after that has to be handed over here too: without this the string was
+// only ever updated on our side, so an element told to change its icon - a stepper
+// walking through overlays, a tool button swapping between two states - went on
+// rendering the texture it was created with until something destroyed and rebuilt it.
+void ControlledProjectile::SetTexturePath(const std::string& path) {
+    if (m_texturePath == path) {
+        return;
+    }
+    m_texturePath = path;
+
+    // Before Initialize() there is nothing to tell; it reads m_texturePath itself.
+    if (m_valid && !m_texturePath.empty()) {
+        // Marks the texture pending; Update() applies it on the main thread once the
+        // projectile's 3D is there, retrying across frames until it takes.
+        m_gameProjectile.SetTexturePath(m_texturePath);
+    }
+}
+
+void ControlledProjectile::SetEffectColor(float r, float g, float b, float a, float glow) {
+    m_effectColor[0] = r;
+    m_effectColor[1] = g;
+    m_effectColor[2] = b;
+    m_effectColor[3] = a;
+    m_effectGlow = glow;
+    m_hasEffectColor = true;
+    m_gameProjectile.SetEffectColor(r, g, b, a, glow);
 }
 
 void ControlledProjectile::ClearBackground() {

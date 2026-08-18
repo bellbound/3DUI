@@ -4,6 +4,13 @@
 
 namespace P3DUI {
 
+namespace {
+    // Internal scale multiplier: user scale 1.0 = effective 0.25 (VR-friendly size).
+    // Applied by both the constructor and SetScale, so an element created with
+    // config.scale = X and one later given SetScale(X) come out the same size.
+    constexpr float kUserScaleToBase = 0.25f;
+}
+
 // =============================================================================
 // ElementWrapper Implementation
 // =============================================================================
@@ -27,8 +34,7 @@ ElementWrapper::ElementWrapper(const ElementConfig& config)
         m_impl->SetModelPath(config.modelPath);
     }
 
-    // Internal scale multiplier: user scale 1.0 = effective 0.25 (VR-friendly size)
-    m_impl->SetBaseScale(config.scale * 0.25f);
+    m_impl->SetBaseScale(config.scale * kUserScaleToBase);
 
     // Apply corrections: formID-based auto-corrections OR manual rotation
     if (config.formID != 0) {
@@ -167,12 +173,12 @@ const wchar_t* ElementWrapper::GetTooltip() {
 
 void ElementWrapper::SetScale(float scale) {
     if (m_destroyed) return;
-    m_impl->SetBaseScale(scale);
+    m_impl->SetBaseScale(scale * kUserScaleToBase);
 }
 
 float ElementWrapper::GetScale() {
     if (m_destroyed) return 1.0f;
-    return m_impl->GetBaseScale();
+    return m_impl->GetBaseScale() / kUserScaleToBase;
 }
 
 void ElementWrapper::SetFacingMode(FacingMode mode) {
@@ -228,6 +234,11 @@ void ElementWrapper::SetBackgroundScale(float scale) {
 void ElementWrapper::ClearBackground() {
     if (m_destroyed) return;
     m_impl->ClearBackground();
+}
+
+void ElementWrapper::SetBackgroundColor(float r, float g, float b, float a, float glow) {
+    if (m_destroyed) return;
+    m_impl->SetBackgroundColor(r, g, b, a, glow);
 }
 
 // =============================================================================

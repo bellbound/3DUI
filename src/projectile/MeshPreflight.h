@@ -27,9 +27,11 @@ namespace Projectile {
 // The rules are deliberately conservative. Measured over 86,767 loose meshes in a
 // large load order they reject 5 files, all genuinely unloadable: one hair ground
 // mesh with the crash signature below, and four Fallout 4 / Starfield skeletons that
-// Skyrim cannot read at all. Meshes that merely look unusual - Skyrim LE format
-// (BS version 83), junk bytes appended after the last block - are let through,
-// because thousands of them load fine every day.
+// Skyrim cannot read at all. The bone rule was measured the same way afterwards, over
+// 96,266 loose meshes, and rejects exactly one more - the mesh that prompted it.
+// Meshes that merely look unusual - Skyrim LE format (BS version 83), junk bytes
+// appended after the last block - are let through, because thousands of them load
+// fine every day.
 class MeshPreflight {
 public:
     enum class Verdict {
@@ -50,6 +52,13 @@ public:
         // is the signature of the crash that prompted this check - typically a hair
         // mesh converted with the wrong NIF Optimizer setting.
         UnskinnedDynamicShape,
+        // A skin instance with no node in the file for its bones to point at. The
+        // loader still walks the bone list the skin *data* declares, so it indexes an
+        // empty bone array and dereferences whatever happens to follow it. This is a
+        // worn armour mesh republished as a ground object with its bone nodes deleted:
+        // ZaZ's HandCuffsIron_go.nif killed the model loader this way, its three skin
+        // instances declaring 0 bones while their NiSkinData declared 3, 3 and 2.
+        SkinnedWithoutBones,
         // The header did not fit in the bytes we read. Internal to Check(); callers
         // see BadHeader once the retry with a larger read has also come up short.
         Incomplete,

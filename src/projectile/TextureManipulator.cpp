@@ -166,6 +166,87 @@ bool TextureManipulator::SetTexture(RE::NiAVObject* node, const char* texturePat
     return true;
 }
 
+// =============================================================================
+// Effect Shader Tint
+// =============================================================================
+
+namespace {
+#if !defined(TEST_ENVIRONMENT)
+    // Tints one geometry. Returns false when the geometry has no effect-shader
+    // material, which is the normal answer for a mesh built on a lighting shader.
+    bool TintGeometry(RE::BSGeometry* geometry, float r, float g, float b, float a, float glow) {
+        auto* effectState = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+        if (!effectState) {
+            return false;
+        }
+
+        auto* shaderProperty = netimmerse_cast<RE::BSShaderProperty*>(effectState);
+        if (!shaderProperty) {
+            return false;
+        }
+
+        auto* material = shaderProperty->material;
+        if (!material || material->GetType() != RE::BSShaderMaterial::Type::kEffect) {
+            return false;
+        }
+
+        auto* effectMaterial = static_cast<RE::BSEffectShaderMaterial*>(material);
+
+        // The tint REPLACES the mesh's authored base colour rather than scaling it, so
+        // re-applying it (retry, rebind, hide/show) lands on the same colour instead of
+        // compounding. glow <= 0 leaves the authored emissive strength alone, which is
+        // what a caller who only wants a hue should pass.
+        effectMaterial->baseColor.red = r;
+        effectMaterial->baseColor.green = g;
+        effectMaterial->baseColor.blue = b;
+        effectMaterial->baseColor.alpha = a;
+        if (glow > 0.0f) {
+            effectMaterial->baseColorScale = glow;
+        }
+
+        // Same rebind dance as SetTexture: the second argument gives this property its
+        // own copy of the material, so tinting one element does not tint every other
+        // instance of the same mesh.
+        shaderProperty->SetMaterial(effectMaterial, true);
+        shaderProperty->SetupGeometry(geometry);
+        shaderProperty->FinishSetupGeometry(geometry);
+        return true;
+    }
+
+    void TintSubtree(RE::NiAVObject* object, float r, float g, float b, float a, float glow, int& count) {
+        if (!object) {
+            return;
+        }
+
+        if (auto* geometry = object->AsGeometry()) {
+            if (TintGeometry(geometry, r, g, b, a, glow)) {
+                ++count;
+            }
+            return;
+        }
+
+        auto* node = object->AsNode();
+        if (!node) {
+            return;
+        }
+        for (auto& child : node->GetChildren()) {
+            TintSubtree(child.get(), r, g, b, a, glow, count);
+        }
+    }
+#endif
+}
+
+int TextureManipulator::SetEffectColor(RE::NiAVObject* root,
+                                       float r, float g, float b, float a, float glow) {
+    int count = 0;
+#if !defined(TEST_ENVIRONMENT)
+    TintSubtree(root, r, g, b, a, glow, count);
+#else
+    (void)root; (void)r; (void)g; (void)b; (void)a; (void)glow;
+#endif
+    return count;
+}
+
 bool TextureManipulator::SetMaterialUV(RE::BSGeometry* geometry,
                                         float offsetX, float offsetY,
                                         float scaleX, float scaleY) {

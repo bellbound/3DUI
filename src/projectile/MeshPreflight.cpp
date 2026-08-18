@@ -51,6 +51,27 @@ bool IsDynamicShapeType(const std::string& type) {
     return type.find("DynamicTriShape") != std::string::npos;
 }
 
+// The skin instance is the block that carries the bone pointer array - every bone the
+// loader resolves goes through one of these.
+bool IsSkinInstanceType(const std::string& type) {
+    return type.find("SkinInstance") != std::string::npos || type == "BSSkin::Instance";
+}
+
+// A bone is a node block in the same file: the skin instance points at it, and at
+// attach time the engine matches it to the actor's skeleton by name. Scene-graph roots
+// do not count - a BSFadeNode is never a bone, and the mesh that prompted this rule is
+// a BSFadeNode with nothing else nodal in it. These are the types the measurement over
+// the load order was run with; add to the list rather than trimming it, since a node
+// type missing from here can only cost a healthy mesh its verdict.
+bool IsBoneNodeType(const std::string& type) {
+    return type == "NiNode" ||
+           type == "BSValueNode" ||
+           type == "NiBillboardNode" ||
+           type == "BSOrderedNode" ||
+           type == "BSLeafAnimNode" ||
+           type == "BSTreeNode";
+}
+
 // Header lines and block type names go into log messages, so keep them printable.
 std::string Sanitize(const std::string& text, std::size_t maxLength = 64) {
     std::string out;
@@ -394,25 +415,43 @@ MeshPreflight::Result MeshPreflight::Inspect(const std::uint8_t* data, std::size
                     blockCount, needed, fileSize)};
     }
 
-    // The crash signature: a dynamic tri shape with no skin anywhere in the file.
+    // Both crash signatures come out of the block table alone, so they share one walk.
     bool        sawSkin = false;
+    bool        sawBoneNode = false;
     int         dynamicBlock = -1;
     std::string dynamicType;
+    int         skinInstanceBlock = -1;
+    std::string skinInstanceType;
     for (std::size_t i = 0; i < blockTypeIndices.size(); ++i) {
         const std::string& type = blockTypes[blockTypeIndices[i]];
         if (IsSkinBlockType(type)) {
             sawSkin = true;
-            break;
+        }
+        if (skinInstanceBlock < 0 && IsSkinInstanceType(type)) {
+            skinInstanceBlock = static_cast<int>(i);
+            skinInstanceType = type;
+        }
+        if (!sawBoneNode && IsBoneNodeType(type)) {
+            sawBoneNode = true;
         }
         if (dynamicBlock < 0 && IsDynamicShapeType(type)) {
             dynamicBlock = static_cast<int>(i);
             dynamicType = type;
         }
     }
+
+    // A dynamic tri shape with no skin anywhere in the file.
     if (!sawSkin && dynamicBlock >= 0) {
         return {Verdict::UnskinnedDynamicShape,
                 std::format("block {} is {} but the file has no skin data", dynamicBlock,
                     Sanitize(dynamicType))};
+    }
+
+    // A skin instance with no node anywhere for its bones to point at.
+    if (skinInstanceBlock >= 0 && !sawBoneNode) {
+        return {Verdict::SkinnedWithoutBones,
+                std::format("block {} is {} but the file has no node to serve as a bone",
+                    skinInstanceBlock, Sanitize(skinInstanceType))};
     }
 
     return {Verdict::Ok, {}};
@@ -520,6 +559,7 @@ const char* MeshPreflight::Describe(Verdict verdict) {
         case Verdict::UnsupportedFormat:     return "unsupported format";
         case Verdict::Truncated:             return "truncated";
         case Verdict::UnskinnedDynamicShape: return "unskinned dynamic tri shape (known loader crash)";
+        case Verdict::SkinnedWithoutBones:   return "skinned shape with no bones (known loader crash)";
         case Verdict::Incomplete:            return "incomplete header";
         default:                             return "unknown";
     }

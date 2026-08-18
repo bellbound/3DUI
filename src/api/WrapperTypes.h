@@ -172,6 +172,7 @@ public:
     void SetBackgroundModel(const char* nifPath) override;
     void SetBackgroundScale(float scale) override;
     void ClearBackground() override;
+    void SetBackgroundColor(float r, float g, float b, float a, float glow) override;
 
     // === Label Text ===
     void SetLabelText(const wchar_t* text) override;
@@ -330,6 +331,7 @@ public:
     void ResetScroll() override;
     void SetFillDirection(VerticalFill verticalFill, HorizontalFill horizontalFill) override;
     void SetOrigin(VerticalOrigin verticalOrigin, HorizontalOrigin horizontalOrigin) override;
+    void SetVisibleExtent(float extent) override;
 
     // Internal access
     std::shared_ptr<Projectile::ColumnGridProjectileDriver> GetImpl() { return m_impl; }
@@ -374,6 +376,7 @@ public:
     void ResetScroll() override;
     void SetFillDirection(VerticalFill verticalFill, HorizontalFill horizontalFill) override;
     void SetOrigin(VerticalOrigin verticalOrigin, HorizontalOrigin horizontalOrigin) override;
+    void SetVisibleExtent(float extent) override;
 
     // Internal access
     std::shared_ptr<Projectile::RowGridProjectileDriver> GetImpl() { return m_impl; }
