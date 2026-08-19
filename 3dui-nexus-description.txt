@@ -1,0 +1,44 @@
+
+[center][b][size=6]3DUI[/size]
+[b]For the full documentation see [url=https://github.com/bellbound/3DUI/wiki]Github Wiki[/url]﻿
+[/b]
+[/b]
+[quote][b]A library for creating 3D floating UIs for Skyrim VR with automatic layout, VR interaction (hover, grab, scroll), and flexible
+anchoring. This is a Modder's resource that does nothing on its own.[/b][/quote]
+[/center]
+
+
+[center][size=5][b]Examples
+[/b][/size]Of what can be made using this
+
+[img]https://i.imgur.com/93sa0yq.jpeg[/img]﻿
+
+[img]https://github.com/bellbound/3DUI/wiki/images/controlled-projectile.gif[/img]﻿
+
+[img]https://github.com/bellbound/3DUI/wiki/images/scroll.gif[/img]﻿
+
+[size=5][b]Requirements[/b][/size]
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/27782]Skyrim VR Tools[/url]﻿
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/106441]BEES [/url]﻿or [url=https://www.nexusmods.com/skyrimspecialedition/mods/106712]Skyrim VR ESL Support[/url]﻿
+
+[size=5][b]Compatibility[/b][/size]
+Compatible with the vast majority of mods
+Some mods that change all projectiles at the engine level might be incompatible
+[i]Spell Bender VR[/i] and [i]Universal Arrow Spin[/i] are compatible
+
+[b][size=5]Mods[/size]
+[/b][size=3]These mods use 3DUI
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/169347]VR Editor[/url]﻿[/size]
+
+[size=5][b]Beta
+[/b][/size]3DUI is still in Beta, until I can get some real user feedback.
+That said, even in beta, it is very unlikely to crash or otherwise
+negatively impact your game when no 3DUI menus are open.
+
+It is safe to install / uninstall at any point.
+
+[size=5][b]Modders[/b][/size][/center]
+[center]﻿This mod provides an extensive c++ interface for your mod to create custom floating interfaces
+No papyrus API is provided at the moment
+
+For the full documentation see [url=https://github.com/bellbound/3DUI/wiki]Github Wiki[/url]﻿[/center]

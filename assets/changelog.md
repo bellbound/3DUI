@@ -1,3 +1,18 @@
+0.10.11
+**No API change** - interface version 0.10.11.0. Nothing in the header moved, so consumers
+built against any 0.10.x keep working without a rebuild.
+- A comma now renders in 3DUI text. The font metrics CSV quotes its Character column the
+  way RFC 4180 requires, so the comma arrives as a quoted field containing a comma; the
+  loader split every line on `,` regardless, which shifted that row's remaining columns by
+  one and left the comma itself unregistered. An unregistered character is not renderable,
+  so every label, tooltip and text node drawn through 3DUI silently dropped the commas it
+  was handed - a name like "Ancient Nord Helmet, Ornamented" lost its punctuation.
+  - The loader now honours the quoting: a quoted field may contain commas, and a doubled
+    quote inside one is a single literal quote. The `"` glyph's own row is written `""""`
+    for exactly that reason, and was surviving only because its codepoint column happened
+    to still line up.
+  - A row with fewer than nine columns is skipped rather than half-read.
+
 0.10.10
 **No API change** - interface version 0.10.10.0. Nothing in the header moved, so consumers
 built against any 0.10.x keep working without a rebuild.
@@ -24,6 +39,12 @@ built against any 0.10.x keep working without a rebuild.
     grab, so a held grab no longer starts with a pop from centre-at-hand to handle-at-hand;
     it starts where it was already converging. For a programmatic `ShowAtHand` it is the
     difference between the menu's middle and its grab orb arriving under the hand.
+- A scrolling wheel now clamps its scroll offset when its child list is replaced under it.
+  Swapping a long list for a short one without hiding the wheel in between left the offset
+  past the end of the new list, so the wheel came up empty and stayed empty for the rest of
+  the session: the reset in `SetVisible` needs a hidden->visible edge that a content swap
+  never produces, and the only other clamp runs mid-drag. Dress Up VR is where it showed -
+  a 500-item gallery category giving way to a 16-item inventory.
 
 0.10.9
 **No API change** - interface version 0.10.9.0. Nothing in the header moved, so consumers
@@ -69,6 +90,17 @@ built against any 0.10.x keep working without a rebuild.
     a swap retries across frames rather than being dropped if the node is not ready yet.
   - Setting the same path twice is a no-op, so a consumer repainting unconditionally on
     every frame costs nothing.
+- Mesh preflight rejects a second loader crash signature: a skin instance with no node
+  anywhere in the file for its bones to point at. The skin instance is the block carrying
+  the bone pointer array, and the engine resolves every one of those against a node block
+  in the same file; with none present the resolve walks a null pointer. As with the
+  unskinned dynamic shape the mesh is swapped for `meshes\3DUI\orb.nif` and the reason is
+  logged, so the element keeps its place in the layout.
+  - Scene-graph roots do not count as bones - a `BSFadeNode` never is, and the mesh that
+    prompted the rule is a `BSFadeNode` with nothing else nodal in it. `NiNode`,
+    `BSValueNode`, `NiBillboardNode`, `BSOrderedNode`, `BSLeafAnimNode` and `BSTreeNode`
+    do. The list errs towards leaving meshes alone: a node type missing from it can only
+    cost a healthy mesh its verdict, so extend it rather than trim it.
 
 0.10.7
 **No API change** - interface version 0.10.7.0. Nothing in the header moved, so consumers

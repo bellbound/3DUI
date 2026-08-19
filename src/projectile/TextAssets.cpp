@@ -1,6 +1,7 @@
 #include "TextAssets.h"
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <spdlog/spdlog.h>
 
 namespace Projectile {
@@ -47,6 +48,39 @@ bool IsRenderableChar(wchar_t ch) {
 // Runtime CSV Loading
 // =============================================================================
 
+// Split one CSV record into fields, honouring RFC-4180 quoting.
+// A quoted field may contain commas; a doubled quote inside it is one literal quote.
+static std::vector<std::string> SplitCSVLine(const std::string& line) {
+    std::vector<std::string> fields;
+    std::string field;
+    bool inQuotes = false;
+
+    for (size_t i = 0; i < line.size(); ++i) {
+        const char c = line[i];
+        if (inQuotes) {
+            if (c == '\"') {
+                if (i + 1 < line.size() && line[i + 1] == '\"') {
+                    field += '\"';  // escaped quote
+                    ++i;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                field += c;
+            }
+        } else if (c == '\"' && field.empty()) {
+            inQuotes = true;
+        } else if (c == ',') {
+            fields.push_back(field);
+            field.clear();
+        } else {
+            field += c;
+        }
+    }
+    fields.push_back(field);
+    return fields;
+}
+
 bool LoadMetricsFromCSV() {
     if (s_metricsLoaded) {
         return true;
@@ -70,18 +104,17 @@ bool LoadMetricsFromCSV() {
         if (line.empty()) continue;
 
         // Parse CSV: Character,Unicode,Index,Row,Col,X,Y,Width,WidthRatio
-        std::stringstream ss(line);
-        std::string charStr, unicode, index, row, col, x, y, width, widthRatio;
+        // The Character column is RFC-4180 quoted, so the comma glyph arrives as a
+        // quoted field containing a comma. Splitting naively on ',' drops that row
+        // and shifts its remaining columns onto the quote glyph.
+        std::vector<std::string> fields = SplitCSVLine(line);
+        if (fields.size() < 9) continue;
 
-        std::getline(ss, charStr, ',');
-        std::getline(ss, unicode, ',');
-        std::getline(ss, index, ',');
-        std::getline(ss, row, ',');
-        std::getline(ss, col, ',');
-        std::getline(ss, x, ',');
-        std::getline(ss, y, ',');
-        std::getline(ss, width, ',');
-        std::getline(ss, widthRatio, ',');
+        const std::string& charStr    = fields[0];
+        const std::string& unicode    = fields[1];
+        const std::string& row        = fields[3];
+        const std::string& col        = fields[4];
+        const std::string& widthRatio = fields[8];
 
         if (charStr.empty() || widthRatio.empty()) continue;
 
