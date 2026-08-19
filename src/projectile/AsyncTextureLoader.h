@@ -31,6 +31,12 @@ using TextureReadyCallback = std::function<void(RE::NiPointer<RE::NiTexture>)>;
 // - RequestTexture() can be called from any thread
 // - ProcessCompletedLoads() MUST be called from main thread only
 // - All callback functions are invoked on main thread
+//
+// A request that passes a callback should come from the main thread. The callback is
+// registered before the load is queued, so the worker cannot outrun it, but an
+// off-thread caller can still lose the race against the main thread's own
+// ProcessCompletedLoads() in the gap between the cache check and that registration -
+// the load completes, fires against an empty list, and the callback never runs.
 // =============================================================================
 class AsyncTextureLoader {
 public:

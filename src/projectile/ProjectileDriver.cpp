@@ -277,6 +277,12 @@ void ProjectileDriver::SetAnchor(RE::NiAVObject* node, bool useRotation, bool us
     m_anchor.SetDirect(node);
     m_anchor.SetUseRotation(useRotation);
     m_anchor.SetUseScale(useScale);
+    // Re-anchoring means "sit at this node", so the offset a previous drag left
+    // behind has to go. Without this the offset survives - SetDirect even early-outs
+    // when the node is unchanged - and the next placement lands at wherever the menu
+    // was last dropped rather than at the anchor. Callers that want to keep a drag
+    // simply do not re-anchor.
+    m_anchor.SetOffset({0, 0, 0});
     if (node) {
         spdlog::trace("ProjectileDriver: Set anchor to {:p}, useRot={}, useScale={}",
             (void*)node, useRotation, useScale);
@@ -415,23 +421,31 @@ void ProjectileDriver::StartDriverPositioning(bool isLeftHand,
     // Store which hand is grabbing - node will be resolved fresh each frame
     m_grabbingIsLeftHand = isLeftHand;
 
-    // Create new anchor for the grab node
-    m_anchor.Clear();
-    m_anchor.SetDirect(handNode);
-
     // If no projectile specified, try to find an anchor handle for drift compensation
     if (!grabbedProjectile) {
         grabbedProjectile = FindFirstAnchorHandle(m_children);
     }
 
+    // Where the driver and its handle sit right now, read BEFORE the anchor is replaced -
+    // both derive from the anchor, so reading them afterwards would just describe the hand.
+    // IMPORTANT: Use GetCenterPosition() (NOT GetWorldPosition()) for the driver because
+    // GetWorldPosition() = m_localPosition + GetCenterPosition(), and m_localPosition
+    // would then be counted twice - the handle's own world position already carries it.
+    const RE::NiPoint3 preGrabCenter = GetCenterPosition();
+    const RE::NiPoint3 preGrabHandlePos =
+        grabbedProjectile ? grabbedProjectile->GetWorldPosition() : preGrabCenter;
+
+    // Create new anchor for the grab node
+    m_anchor.Clear();
+    m_anchor.SetDirect(handNode);
+
     if (grabbedProjectile) {
-        // Grabbing/tracking an anchor handle - preserve relative position so handle stays at hand
-        // IMPORTANT: Use GetCenterPosition() (NOT GetWorldPosition()) because:
-        // GetWorldPosition() = m_localPosition + GetCenterPosition()
-        // If we use GetWorldPosition(), m_localPosition gets counted twice
-        RE::NiPoint3 handWorldPos = handNode->world.translate;
-        RE::NiPoint3 driverCenterWorld = GetCenterPosition();
-        RE::NiPoint3 grabOffset = driverCenterWorld - handWorldPos;
+        // Offset the driver by the handle's own distance from the driver centre, so the
+        // handle - not the centre - is what lands on the hand. That is the same correction
+        // the drift compensation in Update() applies every frame of a grab, so starting
+        // from it removes the first-frame pop, and it is what makes a programmatic
+        // ShowAtHand put the grab orb under the hand instead of the menu's middle.
+        RE::NiPoint3 grabOffset = preGrabCenter - preGrabHandlePos;
         m_anchor.SetOffset(grabOffset);
 
         spdlog::trace("[Driver '{}'] StartDriverPositioning: hand={} anchor='{}' offset=({:.1f},{:.1f},{:.1f})",

@@ -3,6 +3,7 @@
 #include "../log.h"
 #include <unordered_map>
 #include <string>
+#include <string_view>
 
 namespace Projectile {
 
@@ -110,17 +111,65 @@ bool TextureManipulator::SetTexture(RE::NiAVObject* node, const char* texturePat
     // - Placeholder texture (while async load happens in background)
     auto& asyncLoader = AsyncTextureLoader::GetInstance();
 
+    // Record what this node is being repainted to before any async work starts.
+    // A completion callback reads this back to decide whether it is still the swap
+    // the node is waiting for, so it has to be set up front - a cache hit inside
+    // RequestTexture fires its callback inline, before this function returns.
+    effectMaterial->sourceTexturePath = texturePath;
+
     // Check if already fully loaded in async cache
     RE::NiPointer<RE::NiTexture> texture = asyncLoader.GetCachedTexture(pathKey);
 
     if (!texture) {
-        // Not in async cache - request async load with callback for texture swap
-        // Capture necessary pointers for the callback (weak references would be safer in production)
+        // Not in async cache - request async load with callback for texture swap.
+        //
+        // The callback fires a frame or more later, and by then the node it targets
+        // may be gone: a stepper repainting its icon rebuilds the character nodes
+        // beside it in the same frame it asks for the texture. Capturing the geometry,
+        // shader property and material as raw pointers left the callback dereferencing
+        // freed scene-graph memory, which crashed inside the game's SetupGeometry.
+        //
+        // Hold the geometry by NiPointer instead. That keeps it alive until the callback
+        // has run, which is also what makes the liveness checks below legal - reading
+        // ->parent on an already-freed node is the very fault being avoided. The shader
+        // property and material are re-derived at fire time rather than captured, since
+        // the property may have been handed a different material in the meantime.
+        RE::NiPointer<RE::BSGeometry> geometryRef(geometry);
+
         texture = asyncLoader.RequestTexture(pathKey,
-            [geometry, shaderProperty, effectMaterial, pathKey](RE::NiPointer<RE::NiTexture> loadedTexture) {
+            [geometryRef, pathKey](RE::NiPointer<RE::NiTexture> loadedTexture) {
                 // Callback fires on main thread when texture load completes
                 if (!loadedTexture) {
                     spdlog::error("TextureManipulator: Async load FAILED for '{}'", pathKey);
+                    return;
+                }
+
+                // Detached from the scene graph while the load was in flight. The node is
+                // alive only because this callback still holds it, so there is nothing to
+                // rebind and the renderer must not be handed an orphan.
+                if (!geometryRef->parent) {
+                    spdlog::debug("TextureManipulator: Async swap SKIPPED for '{}' - geometry detached", pathKey);
+                    return;
+                }
+
+                auto* effectState = geometryRef->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+                auto* shaderProperty = effectState ? netimmerse_cast<RE::BSShaderProperty*>(effectState) : nullptr;
+                if (!shaderProperty || !shaderProperty->material ||
+                    shaderProperty->material->GetType() != RE::BSShaderMaterial::Type::kEffect) {
+                    spdlog::debug("TextureManipulator: Async swap SKIPPED for '{}' - no effect material", pathKey);
+                    return;
+                }
+
+                auto* effectMaterial = static_cast<RE::BSEffectShaderMaterial*>(shaderProperty->material);
+
+                // The node may have been repainted while the load was in flight - a fast
+                // stepper does exactly that. sourceTexturePath is written synchronously by
+                // every SetTexture call, so it names the texture this node is actually
+                // waiting for; anything else means this callback is stale and applying it
+                // would paint the wrong icon over the current one.
+                if (effectMaterial->sourceTexturePath != std::string_view(pathKey)) {
+                    spdlog::debug("TextureManipulator: Async swap SKIPPED for '{}' - node now shows '{}'",
+                        pathKey, effectMaterial->sourceTexturePath.c_str());
                     return;
                 }
 
@@ -129,8 +178,8 @@ bool TextureManipulator::SetTexture(RE::NiAVObject* node, const char* texturePat
 
                 // Rebind to renderer
                 shaderProperty->SetMaterial(effectMaterial, true);
-                shaderProperty->SetupGeometry(geometry);
-                shaderProperty->FinishSetupGeometry(geometry);
+                shaderProperty->SetupGeometry(geometryRef.get());
+                shaderProperty->FinishSetupGeometry(geometryRef.get());
 
                 spdlog::trace("TextureManipulator: Async texture swap complete for '{}'", pathKey);
             });
@@ -142,8 +191,8 @@ bool TextureManipulator::SetTexture(RE::NiAVObject* node, const char* texturePat
     }
 
     // Apply texture immediately (either cached or placeholder)
+    // sourceTexturePath was already set above, before the async request went out
     effectMaterial->sourceTexture.reset(static_cast<RE::NiSourceTexture*>(texture.get()));
-    effectMaterial->sourceTexturePath = texturePath;
 
     // Reset UV to show full texture (offset=0, scale=1)
     // This ensures icons display correctly without atlas UV artifacts.

@@ -1,3 +1,58 @@
+0.10.10
+**No API change** - interface version 0.10.10.0. Nothing in the header moved, so consumers
+built against any 0.10.x keep working without a rebuild.
+- `SetVRAnchor` now clears the anchor offset. Placing a root by hand - `ShowAtHand`, or the
+  user dragging it by its grab orb - ends by storing where it was dropped as a world-space
+  offset from the facing anchor, and nothing ever cleared that again: `SetVRAnchor` only
+  reassigned the node, and `Anchor::SetDirect` even early-outs when the node is unchanged,
+  which it always is for a menu re-anchored to the HMD. The next open therefore landed at
+  *last drop position + the local offset the caller asked for*, not at the anchor.
+  - VR Sex Menu is where it showed: opening the thread menu from an NPC places it in front
+    of the HMD with no hand involved, so after any hotkey open the menu appeared an arm's
+    length past where it belonged - and since the stale offset is world-space, turning
+    around in between put it behind the player. Every consumer that re-anchors at show time
+    had the same latent bug.
+  - Re-anchoring now means "sit at this node" with no residue. Callers that want to keep a
+    drag simply do not re-anchor.
+- A grab now lands the anchor handle on the hand, not the root's centre. The offset was
+  computed against the anchor *after* it had already been reassigned to the hand node, which
+  made the term self-cancelling: it always came out zero, so both the handle and the
+  no-handle path did the same thing - centre the root on the hand. The pre-grab centre and
+  handle position are now read before the anchor is replaced, and their difference is what
+  offsets the root.
+  - This is the same correction `Update()`'s drift compensation applies on every frame of a
+    grab, so a held grab no longer starts with a pop from centre-at-hand to handle-at-hand;
+    it starts where it was already converging. For a programmatic `ShowAtHand` it is the
+    difference between the menu's middle and its grab orb arriving under the hand.
+
+0.10.9
+**No API change** - interface version 0.10.9.0. Nothing in the header moved, so consumers
+built against any 0.10.x keep working without a rebuild.
+- Fixed the crash 0.10.8 exposed. Swapping a texture on a live element hands the load to a
+  worker thread and applies the result from a callback a frame or two later; that callback
+  reached the geometry, its shader property and its material through raw pointers captured
+  when the swap was requested, and nothing kept those alive or revalidated them. The bug is
+  as old as the async loader, but until 0.10.8 a texture only ever loaded once, at
+  `Initialize()`, on a freshly spawned element that nothing was tearing down yet, so no
+  callback ever outlived what it pointed at.
+  - A stepper is what finds it: pressing next repaints the centre icon and relabels the row
+    in the same frame, and rebuilding the label's character nodes frees scene-graph memory
+    inside the window the icon's load is still open. It took 28 presses to land on the crash
+    here - freed memory only faults once something else has reused it - so the failure is
+    intermittent by nature and gets likelier the faster the list is stepped.
+  - The callback now holds the geometry by `NiPointer`, which keeps it alive until the swap
+    has run and is also what makes checking it legal at all: reading a node's parent to see
+    whether it is still in the scene is exactly the dereference that was crashing. The shader
+    property and material are re-derived from the geometry when the callback fires rather
+    than captured, since the property may have been given a different material since.
+  - **A stale swap is now dropped instead of applied.** If the element has been repainted
+    while its load was in flight - which is what a fast stepper does - the finished texture
+    is no longer painted over the newer one. Without this the crash fix alone would have
+    traded a CTD for the wrong icon.
+  - Only first-time loads were ever exposed: once a path is in the cache the swap is applied
+    synchronously with no callback at all. So this reached anyone stepping through icons the
+    session had not shown yet, and never anyone revisiting ones it had.
+
 0.10.8
 **No API change** - interface version 0.10.8.0. Nothing in the header moved, so consumers
 built against any 0.10.x keep working without a rebuild.

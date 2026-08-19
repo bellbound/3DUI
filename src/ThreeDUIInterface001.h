@@ -671,10 +671,20 @@ struct Root : Container {
 // path before, so the icon went on rendering whatever it was created with until something
 // destroyed and rebuilt it, and a consumer swapping an icon between two states - a stepper
 // walking a list, a toggle button - saw nothing change.
+//
+// 0.10.9.0 changed nothing in this header either. It fixes the crash 0.10.8 exposed: an
+// in-place texture swap whose load finishes a frame or two later no longer applies itself
+// through pointers to scene-graph nodes that may have been torn down in between, and a swap
+// the element has already been repainted past is dropped rather than applied over the top.
+//
+// 0.10.10.0 changed nothing in this header either. SetVRAnchor now clears the offset a
+// previous drag or hand-placement left on the root, so re-anchoring puts the menu at the
+// anchor as its callers have always assumed; and a grab whose root carries an anchor handle
+// lands that handle on the hand rather than the root's centre.
 constexpr uint32_t P3DUI_INTERFACE_VERSION =
     0 * 1000000 +
     10 * 10000 +
-    8 * 100 +
+    10 * 100 +
     0;
 
 struct Interface001 {

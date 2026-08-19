@@ -41,6 +41,16 @@ void AsyncTextureLoader::Start() {
 }
 
 void AsyncTextureLoader::Shutdown() {
+    // Drop pending callbacks first and unconditionally. They can hold NiPointer
+    // references to scene-graph nodes, and this function also runs from the
+    // destructor of a function-local static - releasing a node that late, once the
+    // game's memory manager may already be gone, is a crash of its own. Clearing on
+    // every call keeps that release inside the explicit shutdown instead.
+    {
+        std::lock_guard<std::mutex> lock(m_callbacksMutex);
+        m_callbacks.clear();
+    }
+
     if (!m_running.load()) {
         return;
     }
@@ -68,10 +78,6 @@ void AsyncTextureLoader::Shutdown() {
     {
         std::lock_guard<std::mutex> lock(m_completedQueueMutex);
         while (!m_completedQueue.empty()) m_completedQueue.pop();
-    }
-    {
-        std::lock_guard<std::mutex> lock(m_callbacksMutex);
-        m_callbacks.clear();
     }
 
     spdlog::info("AsyncTextureLoader: Shutdown complete");
@@ -199,7 +205,19 @@ RE::NiPointer<RE::NiTexture> AsyncTextureLoader::RequestTexture(
         }
     }
 
-    // 2. Check if already queued/loading
+    // 2. Register the callback BEFORE the work item is published.
+    // The worker picks up whatever is in the queue, and FireCallbacks only fires
+    // what is registered at the moment it runs - registering afterwards leaves a
+    // window in which a load completes against an empty callback list and the
+    // callback is stranded, holding whatever it captured until Shutdown().
+    if (onReady) {
+        std::lock_guard<std::mutex> cbLock(m_callbacksMutex);
+        m_callbacks[texturePath].push_back(onReady);
+        spdlog::trace("AsyncTextureLoader::RequestTexture - Added callback (callbacks={} for '{}')",
+            m_callbacks[texturePath].size(), texturePath);
+    }
+
+    // 3. Check if already queued/loading
     // NOTE: GetPlaceholder() must be called OUTSIDE the lock to avoid deadlock.
     // GetPlaceholder() may call BSShaderManager::GetTexture() which has internal locks.
     // The worker thread also calls BSShaderManager::GetTexture() then acquires m_loadQueueMutex,
@@ -210,15 +228,8 @@ RE::NiPointer<RE::NiTexture> AsyncTextureLoader::RequestTexture(
         if (m_pendingSet.find(texturePath) != m_pendingSet.end()) {
             spdlog::trace("AsyncTextureLoader::RequestTexture - Already pending '{}'", texturePath);
             alreadyPending = true;
-            // Already pending - just add callback
-            if (onReady) {
-                std::lock_guard<std::mutex> cbLock(m_callbacksMutex);
-                m_callbacks[texturePath].push_back(onReady);
-                spdlog::trace("AsyncTextureLoader::RequestTexture - Added callback (pending callbacks={} for '{}')",
-                    m_callbacks[texturePath].size(), texturePath);
-            }
         } else {
-            // 3. Queue for loading
+            // 4. Queue for loading
             m_loadQueue.push(texturePath);
             m_pendingSet.insert(texturePath);
             spdlog::trace("AsyncTextureLoader::RequestTexture - Queued '{}' (queue={} pending={})",
@@ -229,14 +240,6 @@ RE::NiPointer<RE::NiTexture> AsyncTextureLoader::RequestTexture(
     // Return placeholder for already-pending textures (outside lock to avoid deadlock)
     if (alreadyPending) {
         return GetPlaceholder();
-    }
-
-    // Add callback if provided
-    if (onReady) {
-        std::lock_guard<std::mutex> cbLock(m_callbacksMutex);
-        m_callbacks[texturePath].push_back(onReady);
-        spdlog::trace("AsyncTextureLoader::RequestTexture - Added callback (callbacks={} for '{}')",
-            m_callbacks[texturePath].size(), texturePath);
     }
 
     // Wake up worker thread

@@ -537,6 +537,16 @@ void HalfWheelProjectileDriver::UpdateLayout(float deltaTime) {
         return;
     }
 
+    // The child list gets replaced wholesale while the wheel stays visible - the dressup
+    // menu swaps a 500-item gallery category for a 16-item inventory without ever hiding
+    // the spiral. An offset carried over from the longer list puts the window past every
+    // item in the shorter one, so the wheel comes up empty and stays that way for the rest
+    // of the session: the reset in SetVisible needs a hidden->visible edge that a content
+    // swap never produces, and the only other clamp runs mid-drag.
+    if (!m_isScrolling) {
+        ClampScrollOffset();
+    }
+
     // Ensure visibility tracking vector is correct size
     // Initialize to match actual child visibility state to avoid spurious SetVisible calls
     if (m_previousVisibility.size() != totalItems) {
