@@ -423,6 +423,7 @@ public:
     bool IsGrabbing() override;
     void SetTooltipsEnabled(bool enabled) override;
     bool GetTooltipsEnabled() override;
+    void SetCurvature(float radius, bool horizontal, bool vertical, bool tiltElements) override;
 
     // Internal access
     void MarkDestroyed() { m_destroyed = true; }

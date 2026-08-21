@@ -6,6 +6,7 @@
 #include "TestStubs.h"
 #endif
 
+#include <algorithm>
 #include <memory>
 #include <functional>
 #include <cmath>
@@ -162,6 +163,84 @@ inline RE::NiMatrix3 EulerToMatrix(const RE::NiPoint3& euler) {
     return mat;
 }
 
+// A curve laid over a whole menu, bending its flat plane of elements toward the
+// player so the far edges come within reach - a curved monitor rather than a flat
+// wall. Held by one node (in practice a root); every leaf beneath it bends.
+//
+// It is a post-process, not a layout: containers go on placing children on a flat
+// plane and the warp is applied to the result, so no layout, no scroll maths and
+// no consumer has to know about it.
+//
+// The warp runs in the holder's local space, which for a root facing the player is
+// +Y toward the HMD, +X right, +Z up (see BuildFacingRotation, which the facing
+// strategy builds that frame from).
+struct CurveWarp {
+    // Radius of the cylinder the plane is rolled onto, in game units. 0 = flat.
+    // Smaller bends harder; roughly the distance from the player is a good start,
+    // since that puts the whole menu on a sphere around their head.
+    float radius = 0.0f;
+
+    bool horizontal = true;   // Bend around the vertical axis - left and right edges come forward
+    bool vertical = false;    // Bend around the horizontal axis - top and bottom edges come forward
+
+    // Rotate each element to stay square to the curve. Without it the edge icons
+    // keep the flat plane's orientation and are seen at a glancing angle.
+    bool tiltElements = true;
+
+    // Ceiling on how far round the cylinder an element may be carried, in radians.
+    // A plane wider than the half-circumference would otherwise wrap past the sides
+    // and start coming back toward the player from behind.
+    float maxAngle = 1.2f;
+
+    bool Active() const { return radius > 1.0f; }
+
+    // Arc-length wrap: local X is read as distance along the cylinder's surface and
+    // converted to an angle, so spacing is preserved along the arc while the edges
+    // move both forward (+Y, toward the player) and inward. The inward half is what
+    // actually shortens the reach; a plain y = x^2/2r would push the edges forward
+    // without ever bringing them closer in.
+    RE::NiPoint3 WarpPosition(const RE::NiPoint3& local) const {
+        if (!Active()) {
+            return local;
+        }
+
+        RE::NiPoint3 out = local;
+        if (horizontal) {
+            const float angle = HorizontalAngle(local);
+            out.x = radius * std::sin(angle);
+            out.y += radius * (1.0f - std::cos(angle));
+        }
+        if (vertical) {
+            const float angle = VerticalAngle(local);
+            out.z = radius * std::sin(angle);
+            out.y += radius * (1.0f - std::cos(angle));
+        }
+        return out;
+    }
+
+    // The extra rotation that keeps an element square to the curve at that point.
+    // Identity when tilting is off, so the caller need not branch.
+    RE::NiMatrix3 WarpRotation(const RE::NiPoint3& local) const {
+        if (!Active() || !tiltElements) {
+            return IdentityMatrix();
+        }
+
+        // EulerToMatrix takes (pitch, roll, yaw) in radians.
+        const float yaw = horizontal ? HorizontalAngle(local) : 0.0f;
+        const float pitch = vertical ? -VerticalAngle(local) : 0.0f;
+        return EulerToMatrix(RE::NiPoint3(pitch, 0.0f, yaw));
+    }
+
+private:
+    float HorizontalAngle(const RE::NiPoint3& local) const {
+        return std::clamp(local.x / radius, -maxAngle, maxAngle);
+    }
+
+    float VerticalAngle(const RE::NiPoint3& local) const {
+        return std::clamp(local.z / radius, -maxAngle, maxAngle);
+    }
+};
+
 // Input event types for the composable hierarchy
 enum class InputEventType {
     HoverEnter,     // Hand entered hover threshold
@@ -275,6 +354,46 @@ public:
             return m_parent->GetWorldScale() * m_localScale;
         }
         return m_localScale;
+    }
+
+    // === Curvature ===
+    // The curve this node lays over everything beneath it, or nullptr for the
+    // overwhelming majority of nodes that lay none. Only a root overrides this.
+    virtual const CurveWarp* GetCurveWarp() const { return nullptr; }
+
+    // The nearest ancestor whose curve this node is subject to, or nullptr if none
+    // of them curves. Strictly an ancestor: a node is never bent by its own curve,
+    // which is what keeps the holder's own frame the flat one everything else is
+    // measured in.
+    const IPositionable* FindCurveSpace() const {
+        for (const IPositionable* node = m_parent; node; node = node->GetParent()) {
+            const CurveWarp* warp = node->GetCurveWarp();
+            if (warp && warp->Active()) {
+                return node;
+            }
+        }
+        return nullptr;
+    }
+
+    // This node's transform in `space`'s local frame, composed the ordinary flat
+    // way. This is the position the curve is a function of - accumulated through
+    // however many containers sit in between, so a grid nested in a root still
+    // yields the offset from the root's centre that the curve needs.
+    void GetFlatTransformIn(const IPositionable* space,
+                            RE::NiPoint3& outPosition,
+                            RE::NiMatrix3& outRotation) const {
+        if (this == space || !m_parent) {
+            outPosition = (this == space) ? RE::NiPoint3(0, 0, 0) : m_localPosition;
+            outRotation = (this == space) ? IdentityMatrix() : m_localRotation;
+            return;
+        }
+
+        RE::NiPoint3 parentPosition;
+        RE::NiMatrix3 parentRotation;
+        m_parent->GetFlatTransformIn(space, parentPosition, parentRotation);
+
+        outPosition = parentPosition + RotatePoint(parentRotation, m_localPosition);
+        outRotation = MultiplyMatrices(parentRotation, m_localRotation);
     }
 
     // The part of this node's world scale that exists only to make its own mesh come out

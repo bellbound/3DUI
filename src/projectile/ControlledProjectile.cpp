@@ -143,7 +143,33 @@ RE::NiPoint3 ControlledProjectile::GetPosition() const {
     return m_smoother.GetCurrent().position;
 }
 
+// The curve, if an ancestor lays one over us, and where we sit inside it.
+// Nothing to do for the overwhelmingly common flat case, which returns nullptr
+// and leaves outFlatPosition/outFlatRotation untouched.
+const IPositionable* ControlledProjectile::ResolveCurve(RE::NiPoint3& outFlatPosition,
+                                                        RE::NiMatrix3& outFlatRotation) const {
+    const IPositionable* space = FindCurveSpace();
+    if (!space) {
+        return nullptr;
+    }
+    GetFlatTransformIn(space, outFlatPosition, outFlatRotation);
+    return space;
+}
+
 RE::NiPoint3 ControlledProjectile::GetWorldPosition() const {
+    // Under a curve, the flat chain only gets us as far as the curving ancestor's
+    // frame. The warp is applied there and the result mapped out through that
+    // ancestor's world transform - which is itself flat, since a node is never
+    // subject to its own curve. Drivers in between are left alone deliberately:
+    // their own frames stay the flat ones that scroll dragging, grab offsets and
+    // facing are all measured in.
+    RE::NiPoint3 flatPos;
+    RE::NiMatrix3 flatRot;
+    if (const IPositionable* space = ResolveCurve(flatPos, flatRot)) {
+        const RE::NiPoint3 curved = space->GetCurveWarp()->WarpPosition(flatPos);
+        return space->GetWorldPosition() + RotatePoint(space->GetWorldRotation(), curved);
+    }
+
     // Scene graph: WorldPos = Parent.WorldPos + Parent.WorldRot x LocalPos
     // This ensures parent rotation affects our position in world space
     RE::NiPoint3 localPos = GetLocalPosition();
@@ -179,6 +205,24 @@ float ControlledProjectile::GetWorldScale() const {
 RE::NiMatrix3 ControlledProjectile::GetWorldRotation() const {
     // Get base world rotation from parent chain
     RE::NiMatrix3 worldRot = IPositionable::GetWorldRotation();
+
+    // A curve square to the element it carries: the tilt that keeps an icon facing
+    // out of the cylinder rather than lying in the flat plane it was laid out on.
+    //
+    // Only for an element that is not already billboarding. UpdateBillboard solves
+    // LocalRot = inv(ParentWorldRot) x DesiredWorldRot to aim itself, and it has no
+    // way to know about a tilt applied downstream of that - it would be turned
+    // through the curve twice. An element that already turns to face the player has
+    // no use for the tilt anyway.
+    if (m_billboardMode == BillboardMode::None) {
+        RE::NiPoint3 flatPos;
+        RE::NiMatrix3 flatRot;
+        if (const IPositionable* space = ResolveCurve(flatPos, flatRot)) {
+            const RE::NiMatrix3 tilt = space->GetCurveWarp()->WarpRotation(flatPos);
+            worldRot = MultiplyMatrices(space->GetWorldRotation(),
+                                        MultiplyMatrices(tilt, flatRot));
+        }
+    }
 
     // Apply rotation correction if any component is non-zero
     // Correction is applied in model space (rightmost in multiplication chain)

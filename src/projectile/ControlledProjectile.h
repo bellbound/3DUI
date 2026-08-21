@@ -159,6 +159,11 @@ public:
     RE::NiMatrix3 GetWorldRotation() const override;  // Applies rotationCorrection
     float GetWorldScale() const override;
 
+    // The curving ancestor and this node's flat transform inside it, or nullptr
+    // when nothing above us curves. Shared by the two world-transform overrides.
+    const IPositionable* ResolveCurve(RE::NiPoint3& outFlatPosition,
+                                      RE::NiMatrix3& outFlatRotation) const;
+
     // Event handling - returns false to let events bubble up
     bool OnEvent(InputEvent& event) override;
 

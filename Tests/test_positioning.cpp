@@ -250,3 +250,161 @@ TEST_CASE("ObjectRefHandle for Anchoring", "[positioning][handle]") {
         REQUIRE(ref.Get3D() == &node);
     }
 }
+
+// ============================================================================
+// Curve Warp Tests
+// ============================================================================
+// The curve that bends a menu's flat plane toward the player. Pure maths on
+// local coordinates, so it can be checked exactly.
+
+TEST_CASE("CurveWarp bends a flat plane toward the player", "[curve]") {
+
+    SECTION("A radius of zero is flat") {
+        CurveWarp warp;  // radius defaults to 0
+        REQUIRE_FALSE(warp.Active());
+
+        const RE::NiPoint3 local(40.0f, 0.0f, 12.0f);
+        const RE::NiPoint3 warped = warp.WarpPosition(local);
+
+        REQUIRE(warped.x == Catch::Approx(local.x));
+        REQUIRE(warped.y == Catch::Approx(local.y));
+        REQUIRE(warped.z == Catch::Approx(local.z));
+    }
+
+    SECTION("The centre of the plane does not move") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        REQUIRE(warp.Active());
+
+        const RE::NiPoint3 warped = warp.WarpPosition(RE::NiPoint3(0.0f, 0.0f, 0.0f));
+
+        REQUIRE(warped.x == Catch::Approx(0.0f).margin(1e-5f));
+        REQUIRE(warped.y == Catch::Approx(0.0f).margin(1e-5f));
+        REQUIRE(warped.z == Catch::Approx(0.0f).margin(1e-5f));
+    }
+
+    SECTION("An edge comes forward and inward - the whole point of the curve") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+
+        const RE::NiPoint3 local(45.0f, 0.0f, 0.0f);
+        const RE::NiPoint3 warped = warp.WarpPosition(local);
+
+        // Forward is +Y, toward the player.
+        REQUIRE(warped.y > 0.0f);
+        // Inward: |x| shrinks, because arc length 45 subtends a chord shorter than it.
+        REQUIRE(warped.x < local.x);
+        REQUIRE(warped.x > 0.0f);
+        // And closer to the origin overall, which is what shortens the reach.
+        const float flatDistance = std::sqrt(local.x * local.x + local.y * local.y);
+        const float curvedDistance = std::sqrt(warped.x * warped.x + warped.y * warped.y);
+        REQUIRE(curvedDistance < flatDistance);
+    }
+
+    SECTION("Both edges bend the same way, mirrored") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+
+        const RE::NiPoint3 right = warp.WarpPosition(RE::NiPoint3(45.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 left = warp.WarpPosition(RE::NiPoint3(-45.0f, 0.0f, 0.0f));
+
+        REQUIRE(left.x == Catch::Approx(-right.x));
+        REQUIRE(left.y == Catch::Approx(right.y));
+    }
+
+    SECTION("Height is untouched by a horizontal-only curve") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.horizontal = true;
+        warp.vertical = false;
+
+        const RE::NiPoint3 warped = warp.WarpPosition(RE::NiPoint3(30.0f, 0.0f, 25.0f));
+        REQUIRE(warped.z == Catch::Approx(25.0f));
+    }
+
+    SECTION("A vertical curve bends the other axis instead") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.horizontal = false;
+        warp.vertical = true;
+
+        const RE::NiPoint3 warped = warp.WarpPosition(RE::NiPoint3(30.0f, 0.0f, 45.0f));
+
+        REQUIRE(warped.x == Catch::Approx(30.0f));   // untouched
+        REQUIRE(warped.z < 45.0f);                    // pulled in
+        REQUIRE(warped.y > 0.0f);                     // and forward
+    }
+
+    SECTION("maxAngle stops the plane wrapping back round behind the player") {
+        CurveWarp warp;
+        warp.radius = 10.0f;   // tiny radius, so a modest x would wrap far
+        warp.maxAngle = 1.2f;
+
+        // Far past the clamp: 500 / 10 = 50 radians unclamped.
+        const RE::NiPoint3 warped = warp.WarpPosition(RE::NiPoint3(500.0f, 0.0f, 0.0f));
+
+        // Held at the clamp angle rather than spiralling.
+        REQUIRE(warped.x == Catch::Approx(10.0f * std::sin(1.2f)));
+        REQUIRE(warped.y == Catch::Approx(10.0f * (1.0f - std::cos(1.2f))));
+        // Never behind the plane's own depth: y stays under the diameter.
+        REQUIRE(warped.y < 2.0f * warp.radius);
+    }
+
+    SECTION("Spacing is preserved along the arc, so layouts need no retuning") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+
+        // Two neighbours 10 apart at the centre, and two 10 apart out at the edge.
+        const RE::NiPoint3 nearA = warp.WarpPosition(RE::NiPoint3(0.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 nearB = warp.WarpPosition(RE::NiPoint3(10.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 farA = warp.WarpPosition(RE::NiPoint3(40.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 farB = warp.WarpPosition(RE::NiPoint3(50.0f, 0.0f, 0.0f));
+
+        auto chord = [](const RE::NiPoint3& a, const RE::NiPoint3& b) {
+            const float dx = b.x - a.x, dy = b.y - a.y;
+            return std::sqrt(dx * dx + dy * dy);
+        };
+
+        // Chords are a touch shorter than the 10 units of arc they span, and the two
+        // pairs agree with each other - no bunching at the edges.
+        REQUIRE(chord(nearA, nearB) == Catch::Approx(chord(farA, farB)).epsilon(0.01f));
+        REQUIRE(chord(nearA, nearB) == Catch::Approx(10.0f).epsilon(0.01f));
+    }
+
+    SECTION("Tilting off leaves the rotation alone") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.tiltElements = false;
+
+        const RE::NiMatrix3 rot = warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 0.0f));
+        const RE::NiMatrix3 identity = IdentityMatrix();
+
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                REQUIRE(rot.entry[i][j] == Catch::Approx(identity.entry[i][j]).margin(1e-5f));
+            }
+        }
+    }
+
+    SECTION("Tilting turns an edge element by the angle it was carried through") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.tiltElements = true;
+
+        const float expectedYaw = 45.0f / 90.0f;   // arc length / radius
+        const RE::NiMatrix3 rot = warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 euler = MatrixToEuler(rot);
+
+        REQUIRE(euler.z == Catch::Approx(expectedYaw).margin(1e-4f));  // yaw
+        REQUIRE(euler.x == Catch::Approx(0.0f).margin(1e-4f));         // no pitch
+    }
+
+    SECTION("The centre element is not tilted at all") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+
+        const RE::NiPoint3 euler = MatrixToEuler(warp.WarpRotation(RE::NiPoint3(0.0f, 0.0f, 0.0f)));
+        REQUIRE(euler.x == Catch::Approx(0.0f).margin(1e-5f));
+        REQUIRE(euler.z == Catch::Approx(0.0f).margin(1e-5f));
+    }
+}

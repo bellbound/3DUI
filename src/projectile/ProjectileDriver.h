@@ -68,6 +68,15 @@ public:
     // Get the current center world position
     RE::NiPoint3 GetCenterPosition() const { return m_anchor.GetWorldPosition(); }
 
+    // === Curvature ===
+    // Bend everything beneath this driver toward the player. Set on a root, where
+    // the local frame is the menu's own plane; a curve set on a driver halfway down
+    // works too, and bends only that driver's subtree.
+    void SetCurveWarp(const CurveWarp& warp) { m_curveWarp = warp; }
+    const CurveWarp* GetCurveWarp() const override {
+        return m_curveWarp.Active() ? &m_curveWarp : nullptr;
+    }
+
     // === Facing Anchor (for look-at-player behavior) ===
     // Set an anchor node that the layout will orient toward (e.g., HMD/player head)
     void SetFacingAnchor(RE::NiAVObject* anchor) { m_facingAnchor = anchor; }
@@ -160,6 +169,9 @@ private:
     // Facing anchor and strategy (for look-at-player behavior)
     RE::NiAVObject* m_facingAnchor = nullptr;
     IFacingStrategy* m_facingStrategy = nullptr;
+
+    // Curve laid over this driver's subtree. Flat (radius 0) unless set.
+    CurveWarp m_curveWarp;
 
     // Grab state
     bool m_isGrabbing = false;

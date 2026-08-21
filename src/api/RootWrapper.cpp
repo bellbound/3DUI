@@ -457,6 +457,20 @@ bool RootWrapper::GetTooltipsEnabled() {
     return interaction ? interaction->GetDisplayTooltip() : true;
 }
 
+void RootWrapper::SetCurvature(float radius, bool horizontal, bool vertical, bool tiltElements) {
+    if (m_destroyed || !m_driver) return;
+
+    Projectile::CurveWarp warp;
+    warp.radius = (radius > 0.0f) ? radius : 0.0f;
+    warp.horizontal = horizontal;
+    warp.vertical = vertical;
+    warp.tiltElements = tiltElements;
+    m_driver->SetCurveWarp(warp);
+
+    spdlog::info("RootWrapper::SetCurvature - '{}' radius={:.1f} horizontal={} vertical={} tilt={}",
+        m_id, warp.radius, horizontal, vertical, tiltElements);
+}
+
 // =============================================================================
 // Internal Query Methods (used by Interface001)
 // =============================================================================

@@ -30,6 +30,7 @@ ProjectileDriver::ProjectileDriver(ProjectileDriver&& other) noexcept
     , m_smoothingSpeed(other.m_smoothingSpeed)
     , m_isGrabbing(other.m_isGrabbing)
     , m_useHapticFeedback(other.m_useHapticFeedback)
+    , m_curveWarp(other.m_curveWarp)
     , m_previousAnchor(other.m_previousAnchor)
     , m_grabbedProjectile(std::move(other.m_grabbedProjectile))
     , m_interactionController(std::move(other.m_interactionController))
@@ -55,6 +56,7 @@ ProjectileDriver& ProjectileDriver::operator=(ProjectileDriver&& other) noexcept
         m_smoothingSpeed = other.m_smoothingSpeed;
         m_isGrabbing = other.m_isGrabbing;
         m_useHapticFeedback = other.m_useHapticFeedback;
+        m_curveWarp = other.m_curveWarp;
         m_previousAnchor = other.m_previousAnchor;
         m_grabbedProjectile = std::move(other.m_grabbedProjectile);
         m_interactionController = std::move(other.m_interactionController);
