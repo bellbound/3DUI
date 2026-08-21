@@ -343,11 +343,47 @@ TEST_CASE("CurveWarp bends a flat plane toward the player", "[curve]") {
         // Far past the clamp: 500 / 10 = 50 radians unclamped.
         const RE::NiPoint3 warped = warp.WarpPosition(RE::NiPoint3(500.0f, 0.0f, 0.0f));
 
-        // Held at the clamp angle rather than spiralling.
-        REQUIRE(warped.x == Catch::Approx(10.0f * std::sin(1.2f)));
-        REQUIRE(warped.y == Catch::Approx(10.0f * (1.0f - std::cos(1.2f))));
-        // Never behind the plane's own depth: y stays under the diameter.
-        REQUIRE(warped.y < 2.0f * warp.radius);
+        // The roll stopped at the clamp rather than spiralling: the point sits on
+        // the tangent from the clamp angle, not somewhere round the far side.
+        const float overshoot = 500.0f - 1.2f * 10.0f;
+        REQUIRE(warped.x == Catch::Approx(10.0f * std::sin(1.2f) + overshoot * std::cos(1.2f)));
+        REQUIRE(warped.y == Catch::Approx(10.0f * (1.0f - std::cos(1.2f)) + overshoot * std::sin(1.2f)));
+    }
+
+    SECTION("Past the clamp the plane runs on flat, keeping elements apart") {
+        CurveWarp warp;
+        warp.radius = 10.0f;
+        warp.maxAngle = 1.2f;
+
+        // Three neighbours 10 apart, all well past the clamp at x = 12.
+        const RE::NiPoint3 a = warp.WarpPosition(RE::NiPoint3(100.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 b = warp.WarpPosition(RE::NiPoint3(110.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 c = warp.WarpPosition(RE::NiPoint3(120.0f, 0.0f, 0.0f));
+
+        auto chord = [](const RE::NiPoint3& p, const RE::NiPoint3& q) {
+            const float dx = q.x - p.x, dy = q.y - p.y;
+            return std::sqrt(dx * dx + dy * dy);
+        };
+
+        // Spacing survives the clamp exactly - on the tangent, chord is arc.
+        REQUIRE(chord(a, b) == Catch::Approx(10.0f));
+        REQUIRE(chord(b, c) == Catch::Approx(10.0f));
+        // And they stay ordered rather than piling onto the ceiling.
+        REQUIRE(a.x < b.x);
+        REQUIRE(b.x < c.x);
+    }
+
+    SECTION("The clamp joins the curve smoothly, with no jump at the ceiling") {
+        CurveWarp warp;
+        warp.radius = 10.0f;
+        warp.maxAngle = 1.2f;
+
+        const float atCeiling = 1.2f * 10.0f;   // arc length that reaches the clamp
+        const RE::NiPoint3 just_inside = warp.WarpPosition(RE::NiPoint3(atCeiling - 0.01f, 0.0f, 0.0f));
+        const RE::NiPoint3 just_outside = warp.WarpPosition(RE::NiPoint3(atCeiling + 0.01f, 0.0f, 0.0f));
+
+        REQUIRE(just_outside.x - just_inside.x == Catch::Approx(0.02f * std::cos(1.2f)).margin(1e-4f));
+        REQUIRE(just_outside.y - just_inside.y == Catch::Approx(0.02f * std::sin(1.2f)).margin(1e-4f));
     }
 
     SECTION("Spacing is preserved along the arc, so layouts need no retuning") {

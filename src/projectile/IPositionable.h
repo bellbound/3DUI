@@ -176,8 +176,11 @@ inline RE::NiMatrix3 EulerToMatrix(const RE::NiPoint3& euler) {
 // strategy builds that frame from).
 struct CurveWarp {
     // Radius of the cylinder the plane is rolled onto, in game units. 0 = flat.
-    // Smaller bends harder; roughly the distance from the player is a good start,
-    // since that puts the whole menu on a sphere around their head.
+    // Smaller bends harder. Read it against the menu's own half-width rather than
+    // against the distance to the player: what the eye reads as "curved" is how far
+    // round the cylinder the edges get carried, and that is halfWidth/radius. A
+    // radius of twice the half-width puts the edge at about 30 degrees, which is a
+    // firm, obvious curve; ten times the half-width is a barely perceptible bow.
     float radius = 0.0f;
 
     bool horizontal = true;   // Bend around the vertical axis - left and right edges come forward
@@ -189,8 +192,13 @@ struct CurveWarp {
 
     // Ceiling on how far round the cylinder an element may be carried, in radians.
     // A plane wider than the half-circumference would otherwise wrap past the sides
-    // and start coming back toward the player from behind.
-    float maxAngle = 1.2f;
+    // and start coming back toward the player from behind. Past the ceiling the
+    // plane carries on flat along the tangent - see RollAxis.
+    //
+    // Just under a quarter turn. An element held at the ceiling is already close to
+    // edge-on, so this is a guard against the fold rather than a working position:
+    // pick a radius that keeps the real edges well inside it.
+    float maxAngle = 1.5f;
 
     bool Active() const { return radius > 1.0f; }
 
@@ -206,14 +214,16 @@ struct CurveWarp {
 
         RE::NiPoint3 out = local;
         if (horizontal) {
-            const float angle = HorizontalAngle(local);
-            out.x = radius * std::sin(angle);
-            out.y += radius * (1.0f - std::cos(angle));
+            float along = 0.0f, forward = 0.0f;
+            RollAxis(local.x, along, forward);
+            out.x = along;
+            out.y += forward;
         }
         if (vertical) {
-            const float angle = VerticalAngle(local);
-            out.z = radius * std::sin(angle);
-            out.y += radius * (1.0f - std::cos(angle));
+            float along = 0.0f, forward = 0.0f;
+            RollAxis(local.z, along, forward);
+            out.z = along;
+            out.y += forward;
         }
         return out;
     }
@@ -232,12 +242,32 @@ struct CurveWarp {
     }
 
 private:
-    float HorizontalAngle(const RE::NiPoint3& local) const {
-        return std::clamp(local.x / radius, -maxAngle, maxAngle);
+    // How far round the cylinder a point `arc` units from the centre is carried.
+    float AngleAt(float arc) const {
+        return std::clamp(arc / radius, -maxAngle, maxAngle);
     }
 
-    float VerticalAngle(const RE::NiPoint3& local) const {
-        return std::clamp(local.z / radius, -maxAngle, maxAngle);
+    float HorizontalAngle(const RE::NiPoint3& local) const { return AngleAt(local.x); }
+    float VerticalAngle(const RE::NiPoint3& local) const { return AngleAt(local.z); }
+
+    // One axis of the plane rolled onto the cylinder. `arc` is the flat distance
+    // from the centre along that axis; out come the distance along the cylinder's
+    // surface and how far forward (toward the player) that point ends up.
+    void RollAxis(float arc, float& outAlong, float& outForward) const {
+        const float angle = AngleAt(arc);
+        outAlong = radius * std::sin(angle);
+        outForward = radius * (1.0f - std::cos(angle));
+
+        // Anything past maxAngle carries on flat, along the tangent at that angle,
+        // rather than rolling further. Freezing it at the ceiling instead would pile
+        // every element beyond the ceiling onto one spot; running along the tangent
+        // keeps them their proper distance apart and merely stops the curve from
+        // wrapping any further round. Exactly zero for the ordinary unclamped case.
+        const float overshoot = arc - angle * radius;
+        if (overshoot != 0.0f) {
+            outAlong += overshoot * std::cos(angle);
+            outForward += overshoot * std::sin(angle);
+        }
     }
 };
 
