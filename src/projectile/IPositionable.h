@@ -186,6 +186,14 @@ struct CurveWarp {
     bool horizontal = true;   // Bend around the vertical axis - left and right edges come forward
     bool vertical = false;    // Bend around the horizontal axis - top and bottom edges come forward
 
+    // With both set the two bends are applied independently and their forward
+    // offsets add, which gives a separable dome rather than a true spherical cap: a
+    // corner element comes forward by the sum of what its row and its column each
+    // owe, where a sphere would owe it their combined radius. At the sizes a menu
+    // runs to the difference is well under a unit, and keeping the axes separable is
+    // what lets a grid stay rectilinear - rows stay level and columns stay upright
+    // instead of fanning toward a pole.
+
     // Rotate each element to stay square to the curve. Without it the edge icons
     // keep the flat plane's orientation and are seen at a glancing angle.
     bool tiltElements = true;
@@ -248,10 +256,20 @@ struct CurveWarp {
             return IdentityMatrix();
         }
 
-        // EulerToMatrix takes (pitch, roll, yaw) in radians.
-        const float yaw = horizontal ? TiltAt(local.x) : 0.0f;
-        const float pitch = vertical ? -TiltAt(local.z) : 0.0f;
-        return EulerToMatrix(RE::NiPoint3(pitch, 0.0f, yaw));
+        // EulerToMatrix takes (pitch, roll, yaw) in radians, and its "pitch" slot is a
+        // rotation about Y while its "roll" slot is a rotation about X - read the
+        // matrix it builds rather than the names. In this frame +Y is the direction
+        // the element already faces, so turning about Y would bank it sideways and do
+        // nothing useful. The two turns that matter here are:
+        //
+        //   about Z (yaw)  - for the horizontal curve, swinging left and right
+        //   about X (roll) - for the vertical curve, tipping top and bottom forward
+        //
+        // Signs put the element's facing back through the curve's centre: an element
+        // carried a radians round is turned a radians to look back down the radius.
+        const float aboutZ = horizontal ? TiltAt(local.x) : 0.0f;
+        const float aboutX = vertical ? -TiltAt(local.z) : 0.0f;
+        return EulerToMatrix(RE::NiPoint3(0.0f, aboutX, aboutZ));
     }
 
 private:

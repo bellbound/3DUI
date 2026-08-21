@@ -480,6 +480,90 @@ TEST_CASE("CurveWarp bends a flat plane toward the player", "[curve]") {
         REQUIRE(euler.z == Catch::Approx(0.5f).margin(1e-4f));
     }
 
+    SECTION("A vertical curve tips elements about X, it does not bank them") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.horizontal = false;
+        warp.vertical = true;
+
+        // 45 up at radius 90 is half a radian round the curve.
+        const RE::NiMatrix3 rot = warp.WarpRotation(RE::NiPoint3(0.0f, 0.0f, 45.0f));
+
+        // The element's facing (+Y) should tip down toward the curve's centre...
+        const RE::NiPoint3 facing = RotatePoint(rot, RE::NiPoint3(0.0f, 1.0f, 0.0f));
+        REQUIRE(facing.x == Catch::Approx(0.0f).margin(1e-5f));
+        REQUIRE(facing.y == Catch::Approx(std::cos(0.5f)).margin(1e-4f));
+        REQUIRE(facing.z == Catch::Approx(-std::sin(0.5f)).margin(1e-4f));
+
+        // ...while its sideways axis stays level. A bank would have rolled this.
+        const RE::NiPoint3 right = RotatePoint(rot, RE::NiPoint3(1.0f, 0.0f, 0.0f));
+        REQUIRE(right.x == Catch::Approx(1.0f).margin(1e-5f));
+        REQUIRE(right.z == Catch::Approx(0.0f).margin(1e-5f));
+    }
+
+    SECTION("An element below centre tips the other way") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.horizontal = false;
+        warp.vertical = true;
+
+        const RE::NiPoint3 above = RotatePoint(warp.WarpRotation(RE::NiPoint3(0, 0, 45.0f)),
+                                               RE::NiPoint3(0.0f, 1.0f, 0.0f));
+        const RE::NiPoint3 below = RotatePoint(warp.WarpRotation(RE::NiPoint3(0, 0, -45.0f)),
+                                               RE::NiPoint3(0.0f, 1.0f, 0.0f));
+
+        REQUIRE(above.z < 0.0f);   // top of the dome looks down
+        REQUIRE(below.z > 0.0f);   // bottom looks up
+        REQUIRE(above.z == Catch::Approx(-below.z).margin(1e-5f));
+    }
+
+    SECTION("A dome bends both axes, and the corners owe both") {
+        CurveWarp warp;
+        warp.radius = 37.5f;
+        warp.horizontal = true;
+        warp.vertical = true;
+
+        const RE::NiPoint3 sideOnly = warp.WarpPosition(RE::NiPoint3(25.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 topOnly = warp.WarpPosition(RE::NiPoint3(0.0f, 0.0f, 25.0f));
+        const RE::NiPoint3 corner = warp.WarpPosition(RE::NiPoint3(25.0f, 0.0f, 25.0f));
+
+        // Each edge comes forward on its own...
+        REQUIRE(sideOnly.y > 0.0f);
+        REQUIRE(topOnly.y > 0.0f);
+        // ...and the corner by the sum of the two, the separable dome.
+        REQUIRE(corner.y == Catch::Approx(sideOnly.y + topOnly.y).margin(1e-4f));
+
+        // Both of the corner's axes are drawn in from where a flat plane put them.
+        REQUIRE(corner.x < 25.0f);
+        REQUIRE(corner.z < 25.0f);
+    }
+
+    SECTION("A dome turns a corner element on both axes at once") {
+        CurveWarp warp;
+        warp.radius = 37.5f;
+        warp.horizontal = true;
+        warp.vertical = true;
+
+        const RE::NiMatrix3 rot = warp.WarpRotation(RE::NiPoint3(25.0f, 0.0f, 25.0f));
+        const RE::NiPoint3 facing = RotatePoint(rot, RE::NiPoint3(0.0f, 1.0f, 0.0f));
+
+        REQUIRE(facing.x < 0.0f);   // swung toward the near side
+        REQUIRE(facing.z < 0.0f);   // and tipped down
+    }
+
+    SECTION("A horizontal-only curve leaves the tilt purely a yaw") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.horizontal = true;
+        warp.vertical = false;
+
+        const RE::NiMatrix3 rot = warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 30.0f));
+
+        // Height plays no part, and the up axis stays up.
+        const RE::NiPoint3 up = RotatePoint(rot, RE::NiPoint3(0.0f, 0.0f, 1.0f));
+        REQUIRE(up.z == Catch::Approx(1.0f).margin(1e-5f));
+    }
+
     SECTION("The centre element is not tilted at all") {
         CurveWarp warp;
         warp.radius = 90.0f;
