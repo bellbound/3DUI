@@ -190,6 +190,19 @@ struct CurveWarp {
     // keep the flat plane's orientation and are seen at a glancing angle.
     bool tiltElements = true;
 
+    // Ceiling on that tilt, in radians - separate from maxAngle, and reached first.
+    //
+    // Turning with the curve is what stops an edge element being seen at a glancing
+    // angle, but past a point the cure becomes the disease: an element square to a
+    // hard curve is turned so far that it presents its own edge instead, and the
+    // icon disappears at exactly the position the curve was meant to make reachable.
+    // So position keeps rolling all the way round - that is where the reach comes
+    // from - while the tilt stops here and the far elements stay legible, cheating
+    // slightly toward the player rather than facing squarely out of the cylinder.
+    //
+    // About 50 degrees, where an icon is foreshortened to roughly two thirds width.
+    float maxTiltAngle = 0.9f;
+
     // Ceiling on how far round the cylinder an element may be carried, in radians.
     // A plane wider than the half-circumference would otherwise wrap past the sides
     // and start coming back toward the player from behind. Past the ceiling the
@@ -236,8 +249,8 @@ struct CurveWarp {
         }
 
         // EulerToMatrix takes (pitch, roll, yaw) in radians.
-        const float yaw = horizontal ? HorizontalAngle(local) : 0.0f;
-        const float pitch = vertical ? -VerticalAngle(local) : 0.0f;
+        const float yaw = horizontal ? TiltAt(local.x) : 0.0f;
+        const float pitch = vertical ? -TiltAt(local.z) : 0.0f;
         return EulerToMatrix(RE::NiPoint3(pitch, 0.0f, yaw));
     }
 
@@ -247,8 +260,12 @@ private:
         return std::clamp(arc / radius, -maxAngle, maxAngle);
     }
 
-    float HorizontalAngle(const RE::NiPoint3& local) const { return AngleAt(local.x); }
-    float VerticalAngle(const RE::NiPoint3& local) const { return AngleAt(local.z); }
+    // How far an element `arc` units from the centre is turned. The same angle the
+    // position was rolled through, held at maxTiltAngle so a hard curve cannot turn
+    // the far elements edge-on.
+    float TiltAt(float arc) const {
+        return std::clamp(AngleAt(arc), -maxTiltAngle, maxTiltAngle);
+    }
 
     // One axis of the plane rolled onto the cylinder. `arc` is the flat distance
     // from the centre along that axis; out come the distance along the cylinder's

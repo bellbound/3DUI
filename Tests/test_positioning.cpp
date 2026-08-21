@@ -435,6 +435,51 @@ TEST_CASE("CurveWarp bends a flat plane toward the player", "[curve]") {
         REQUIRE(euler.x == Catch::Approx(0.0f).margin(1e-4f));         // no pitch
     }
 
+    SECTION("The tilt is capped so a hard curve cannot turn elements edge-on") {
+        CurveWarp warp;
+        warp.radius = 30.0f;
+        warp.maxTiltAngle = 0.9f;
+
+        // 45 units out at radius 30 is 1.5 radians round - nearly edge-on if the
+        // tilt followed the roll all the way.
+        const RE::NiPoint3 euler = MatrixToEuler(warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 0.0f)));
+        REQUIRE(euler.z == Catch::Approx(0.9f).margin(1e-4f));
+    }
+
+    SECTION("Position keeps rolling past the tilt cap - the reach is not capped") {
+        CurveWarp warp;
+        warp.radius = 30.0f;
+        warp.maxTiltAngle = 0.9f;
+
+        // Two elements both past the tilt cap still separate in space.
+        const RE::NiPoint3 nearer = warp.WarpPosition(RE::NiPoint3(30.0f, 0.0f, 0.0f));
+        const RE::NiPoint3 further = warp.WarpPosition(RE::NiPoint3(45.0f, 0.0f, 0.0f));
+
+        REQUIRE(further.y > nearer.y);   // still coming forward past the cap
+        REQUIRE(further.x > nearer.x);   // and still in order, not folded over
+
+        // Both are drawn in from where they would sit on a flat plane. Note this is
+        // inward against flat, not inward against each other: sideways travel only
+        // reverses past a quarter turn, which maxAngle does not allow.
+        REQUIRE(nearer.x < 30.0f);
+        REQUIRE(further.x < 45.0f);
+
+        // Their tilts, by contrast, are both pinned at the cap.
+        const RE::NiPoint3 a = MatrixToEuler(warp.WarpRotation(RE::NiPoint3(30.0f, 0.0f, 0.0f)));
+        const RE::NiPoint3 b = MatrixToEuler(warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 0.0f)));
+        REQUIRE(a.z == Catch::Approx(b.z).margin(1e-4f));
+    }
+
+    SECTION("Inside the cap the tilt still follows the curve exactly") {
+        CurveWarp warp;
+        warp.radius = 90.0f;
+        warp.maxTiltAngle = 0.9f;
+
+        // 45 / 90 = 0.5 radians, comfortably inside the cap.
+        const RE::NiPoint3 euler = MatrixToEuler(warp.WarpRotation(RE::NiPoint3(45.0f, 0.0f, 0.0f)));
+        REQUIRE(euler.z == Catch::Approx(0.5f).margin(1e-4f));
+    }
+
     SECTION("The centre element is not tilted at all") {
         CurveWarp warp;
         warp.radius = 90.0f;
