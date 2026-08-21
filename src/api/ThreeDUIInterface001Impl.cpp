@@ -103,7 +103,7 @@ public:
         return ptr;
     }
 
-    Container* CreateScrollWheel(const ScrollWheelConfig& config) override {
+    ScrollWheel* CreateScrollWheel(const ScrollWheelConfig& config) override {
         if (!config.id || !*config.id) {
             spdlog::error("P3DUI::CreateScrollWheel: ID is required");
             return nullptr;

@@ -62,6 +62,14 @@ public:
     float GetScrollOffset() const { return m_scrollOffset; }
     bool CanScroll() const;  // Returns true if there are more items than visible slots
 
+    // Set the angular scroll offset directly, clamped to what the current children allow.
+    // Ignored mid-drag, so restoring a remembered position cannot fight the hand that is
+    // scrolling right now.
+    void SetScrollOffset(float offset);
+
+    // Largest offset the current children allow (0 when the wheel cannot scroll)
+    float GetMaxScrollOffset() const { return ComputeMaxScrollOffset(); }
+
     // === Visibility (override to handle scroll offset on child count changes) ===
     void SetVisible(bool visible) override;
 

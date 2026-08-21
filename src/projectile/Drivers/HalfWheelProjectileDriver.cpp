@@ -315,6 +315,18 @@ float HalfWheelProjectileDriver::ComputeMaxScrollOffset() const {
     return (maxOffset > 0.0f) ? maxOffset : 0.0f;
 }
 
+void HalfWheelProjectileDriver::SetScrollOffset(float offset) {
+    // A drag in progress owns the offset; a restore arriving mid-drag would yank the
+    // wheel out from under the hand and then be overwritten on the next frame anyway.
+    if (m_isScrolling) {
+        return;
+    }
+
+    m_scrollOffset = offset;
+    ClampScrollOffset();
+    // Layout will be recomputed on next UpdateLayout call
+}
+
 void HalfWheelProjectileDriver::ClampScrollOffset() {
     // Guard against NaN/infinity from bad calculations (e.g., after game freeze/resume)
     if (!std::isfinite(m_scrollOffset)) {

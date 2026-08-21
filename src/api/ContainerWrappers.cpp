@@ -253,6 +253,34 @@ bool ScrollWheelWrapper::GetUseHapticFeedback() {
     return m_impl->GetUseHapticFeedback();
 }
 
+// --- ScrollWheel ---
+
+float ScrollWheelWrapper::GetScrollPosition() {
+    if (m_destroyed || !m_impl->CanScroll()) return 0.0f;
+
+    // Normalize angular scroll offset to 0.0-1.0 range
+    float maxOffset = m_impl->GetMaxScrollOffset();
+    if (maxOffset <= 0.0f) return 0.0f;
+
+    return std::clamp(m_impl->GetScrollOffset() / maxOffset, 0.0f, 1.0f);
+}
+
+void ScrollWheelWrapper::SetScrollPosition(float position) {
+    if (m_destroyed) return;
+
+    // Convert normalized position to angular offset. The range comes from the children
+    // the wheel holds right now, so a caller restoring a position must fill the wheel first.
+    float maxOffset = m_impl->GetMaxScrollOffset();
+    float targetOffset = std::clamp(position, 0.0f, 1.0f) * maxOffset;
+
+    m_impl->SetScrollOffset(targetOffset);
+}
+
+void ScrollWheelWrapper::ResetScroll() {
+    if (m_destroyed) return;
+    m_impl->SetScrollOffset(0.0f);
+}
+
 // =============================================================================
 // WheelWrapper Implementation
 // =============================================================================

@@ -228,7 +228,7 @@ private:
     bool m_destroyed;
 };
 
-class ScrollWheelWrapper : public Container {
+class ScrollWheelWrapper : public ScrollWheel {
 public:
     ScrollWheelWrapper(const ScrollWheelConfig& config);
     ~ScrollWheelWrapper();
@@ -251,6 +251,11 @@ public:
     Positionable* GetChildAt(uint32_t index) override;
     void SetUseHapticFeedback(bool enabled) override;
     bool GetUseHapticFeedback() override;
+
+    // === ScrollWheel ===
+    float GetScrollPosition() override;
+    void SetScrollPosition(float position) override;
+    void ResetScroll() override;
 
     // Internal access
     std::shared_ptr<Projectile::HalfWheelProjectileDriver> GetImpl() { return m_impl; }
