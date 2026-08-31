@@ -1,3 +1,72 @@
+0.10.13
+**Additive API change** - interface version 0.10.13.0. `CreateScrollWheel` now returns
+`ScrollWheel*` rather than `Container*`. A signature moved, but this is additive in the
+same sense as 0.10.1.0: the returned pointer is unchanged, `ScrollWheel`'s `Container`
+vtable prefix is unchanged, and a consumer built against any earlier 0.10.x header still
+compiles and still dispatches correctly through the `Container*` it stores.
+- The half-wheel has the scroll accessors the grids have had all along. `ScrollWheel` is
+  `Container` plus `GetScrollPosition`, `SetScrollPosition` and `ResetScroll`, on the same
+  normalized 0..1 range `ColumnGrid` and `RowGrid` use.
+  - Underneath, `HalfWheelProjectileDriver` had a getter for its angular offset and no
+    setter at all, so a menu that swaps the wheel's contents between views could only ever
+    leave the offset wherever the last view had put it. Any consumer that already saves and
+    restores its grids' scroll positions can now do the same for the wheel.
+  - `SetScrollPosition` ignores a call that arrives mid-drag. The hand owns the offset while
+    it is scrolling, and a restore landing in the middle of one would yank the wheel away
+    and be overwritten on the next frame regardless.
+
+0.10.12
+**Additive API change** - interface version 0.10.12.0. `Root::SetCurvature` took the
+`_root_reserved1` slot, so no vtable index moved: consumers built against any 0.10.x keep
+working against this DLL without a rebuild, and unbent - the curve is off unless a radius
+is set.
+- `Root::SetCurvature(radius, horizontal, vertical, tiltElements)` rolls a root's flat plane
+  onto a cylinder, so the further from the centre an element sits the further forward and
+  inward it comes. A menu that grows past arm's span puts its own edges out of reach, and no
+  amount of spacing tuning fixes that; this is the fix.
+  - **It is a post-process, not a layout.** Containers go on placing children on a flat plane
+    and the warp is applied to the result, in the local frame of the curving root - so no
+    layout, no spacing constant, no scroll extent and no consumer has to know it exists. A
+    grid inside a root bends as one piece with everything else rather than each container
+    bending about its own centre, because an element's flat offset is measured all the way up
+    to the curving root.
+  - **The warp is arc-length.** Local X is read as distance along the cylinder's surface
+    rather than as a chord, so spacing is preserved along the arc and the edges move inward
+    as well as forward. Bending on Y alone would push the edges away without ever bringing
+    them closer to the hand, which is the half that actually shortens the reach.
+  - **Pick the radius against the menu's own half-width, not its distance from the head.**
+    How curved a plane looks is how far round the cylinder its edges are carried -
+    `halfWidth / radius` - and that has nothing to do with how far away the whole thing is. A
+    menu 45 units to its widest element at radius 90 carries its edge through half a radian
+    and reads as flat. Ten times the half-width is a bow you have to look for, twice it is a
+    clear curve, and about two thirds of it wraps hard around the player.
+  - `tiltElements` turns each element to stay square to the curve. **The turn is capped at
+    about 50 degrees** however hard the curve is: past that an element turned square to the
+    curve presents its own edge, and the icon vanishes at exactly the position the curve
+    exists to make reachable. Position goes on rolling all the way round - that is where the
+    reach comes from - while the far elements cheat towards the player.
+  - The tilt is skipped for any element whose `facingMode` is not `None`. `UpdateBillboard`
+    solves its local rotation against the parent's world rotation and cannot see a tilt
+    applied downstream of that, so such an element would be turned through the curve twice.
+  - **Past `maxAngle` the plane runs on flat along the tangent** rather than piling up. The
+    ceiling used to clamp the angle and leave it there, which froze position too and landed
+    every element beyond it on the same spot. Position and its first derivative are both
+    continuous across the join, so nothing jumps as an element scrolls through it. `maxAngle`
+    itself goes from 1.2 to 1.5 - just under a quarter turn - so a firmer curve has headroom
+    before it meets the ceiling.
+  - **Hover and grab need no separate treatment.** Interaction is a distance test against the
+    same `GetWorldPosition` that rendering reads, so the hitboxes curve with the elements.
+  - Applied in `ControlledProjectile` alone, deliberately. Drivers keep flat frames, so scroll
+    dragging, grab offsets and the facing computation are all still measured in the
+    coordinates they were written for; and because a backdrop plate and every glyph of a
+    label are themselves projectiles parented to their element, they follow the curve with
+    nothing added.
+  - **Fixed in this release:** the vertical tilt was being written into the rotation slot that
+    turns an element about the axis it already faces along, which banked it sideways instead
+    of tipping it toward the curve. Latent until now - vertical bending had never been
+    switched on by any consumer, so the only tilt anyone had seen was the horizontal one,
+    which was going into the right slot all along.
+
 0.10.11
 **No API change** - interface version 0.10.11.0. Nothing in the header moved, so consumers
 built against any 0.10.x keep working without a rebuild.
